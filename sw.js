@@ -1,8 +1,9 @@
-const CACHE_NAME = 'lehra-studio-v1';
+const CACHE_NAME = 'lehra-studio-v10';
 const ASSETS = [
   './',
   './index.html',
   './style.css',
+  './notation.js',
   './app.js',
   './catalogue.js',
   './assets/Metronome.aac',

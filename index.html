@@ -12,8 +12,10 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@300;400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=2" />
+  <link rel="stylesheet" href="style.css?v=17" />
   <link rel="manifest" href="manifest.json" />
+  <!-- For PDF Export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 
 <body>
@@ -41,6 +43,12 @@
         <span class="logo-sub">Indian Classical Practice</span>
       </div>
     </div>
+    
+    <nav class="site-nav">
+      <button class="nav-btn active" data-target="view-lehra">Lehra Player</button>
+      <button class="nav-btn" data-target="view-separator">Stem Separator</button>
+      <button class="nav-btn" data-target="view-notation">Notation Editor</button>
+    </nav>
     <div class="header-right">
       <button id="statsBtn" class="header-icon-btn" title="Riyaz Tracker">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
@@ -77,6 +85,9 @@
 
   <!-- Main App -->
   <main class="app-container">
+
+    <!-- LEHRA PLAYER VIEW -->
+    <div id="view-lehra" class="app-view active-view">
 
     <!-- Now Playing Card -->
     <section class="now-playing-card" id="nowPlayingCard">
@@ -306,8 +317,171 @@
         <span>Indian Classical Lehra Player</span>
       </div>
     </footer>
+    </div> <!-- End view-lehra -->
+
+    <!-- STEM SEPARATOR VIEW -->
+    <div id="view-separator" class="app-view" style="display: none;">
+      <section class="separator-card">
+          <div class="separator-header">
+            <h2 class="panel-title" style="display: flex; align-items: center; gap: 12px;">
+              AI Stem & Instrument Separator
+              <span style="font-size: 0.6rem; background: rgba(232,87,42,0.2); border: 1px solid var(--orange); color: var(--gold); padding: 4px 10px; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.1em;">Under Development</span>
+            </h2>
+            <p class="panel-subtitle">Upload any audio file to isolate vocals, tabla, or melody using AI.</p>
+          </div>
+        
+        <div class="upload-zone" id="uploadZone">
+          <input type="file" id="audioUpload" accept="audio/*" style="display: none;">
+          <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="var(--gold)" stroke-width="1.5" style="margin-bottom: 12px;">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+          </svg>
+          <p>Drag & Drop an audio file here</p>
+          <p style="font-size: 0.8rem; color: var(--text-sub); margin-top: 4px;">or click to browse (MP3, WAV)</p>
+        </div>
+
+        <div class="processing-zone" id="processingZone" style="display: none;">
+          <div class="spinner"></div>
+          <p id="processingText">Processing stems... this may take a minute.</p>
+        </div>
+
+        <div class="mixer-zone" id="mixerZone" style="display: none;">
+          <div class="panel-header" style="margin-bottom: 16px;">
+            <h3 class="panel-title" style="font-size: 1.1rem;">Mixer</h3>
+            <div class="transport" style="margin-top: 0;">
+              <button class="btn-transport btn-play" id="mixerPlayBtn" title="Play / Pause Stems" style="width: 40px; height: 40px;">
+                <svg id="mixerPlayIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                <svg id="mixerPauseIcon" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
+              </button>
+            </div>
+          </div>
+          <div class="mixer-tracks" id="mixerTracks">
+            <!-- Dynamically populated by JS -->
+          </div>
+        </div>
+      </section>
+    </div> <!-- End view-separator -->
+
+    <!-- NOTATION EDITOR VIEW -->
+    <div id="view-notation" class="app-view" style="display: none;">
+      <section class="notation-card studio-layout">
+        
+        <!-- Sidebar Palette -->
+        <aside class="studio-sidebar">
+          <div class="sidebar-header">
+            <h3 class="sidebar-title">Palette</h3>
+            <input type="text" class="palette-search" placeholder="Search..." id="paletteSearch">
+          </div>
+          <div class="palette-grid" id="paletteGrid">
+            <!-- Populated dynamically based on Mode & Lang -->
+          </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="studio-workspace">
+          
+          <!-- Top Control Bar -->
+          <div class="studio-topbar">
+            <div class="studio-toggles">
+              <div class="toggle-group" id="modeToggle">
+                <button class="toggle-btn active" data-val="tabla">Tabla</button>
+                <button class="toggle-btn" data-val="vocal">Vocal</button>
+              </div>
+              <div class="toggle-group" id="systemToggle">
+                <button class="toggle-btn active" data-val="bhatkhande">Bhatkhande</button>
+                <button class="toggle-btn" data-val="paluskar">Paluskar</button>
+              </div>
+              <div class="toggle-group" id="langToggle">
+                <button class="toggle-btn active" data-val="en">English</button>
+                <button class="toggle-btn" data-val="hi">हिंदी</button>
+              </div>
+            </div>
+            
+            <div class="studio-actions">
+              <button class="header-icon-btn" id="nsUndo" title="Undo"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg></button>
+              <button class="header-icon-btn" id="nsRedo" title="Redo"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/></svg></button>
+              <button class="header-icon-btn" id="nsPlayBtn" style="color: var(--gold); border-color: var(--gold);">PLAY</button>
+              <button class="header-icon-btn" id="nsExportBtn">PDF / PNG</button>
+              <button class="header-icon-btn" id="nsHelpBtn" title="How to Use">?</button>
+            </div>
+          </div>
+
+          <!-- Formatting Toolbar -->
+          <div class="notation-toolbar">
+            <select id="nsTaal" class="pitch-select">
+              <option value="16">Teentaal (16)</option>
+              <option value="12">Ektaal (12)</option>
+              <option value="10">Jhaptaal (10)</option>
+              <option value="8">Keharwa (8)</option>
+              <option value="7">Rupak (7)</option>
+              <option value="6">Dadra (6)</option>
+              <option value="14">Dhamar (14)</option>
+              <option value="14_deep">Deepchandi (14)</option>
+            </select>
+            <select id="nsTemplate" class="pitch-select">
+              <option value="">Templates...</option>
+              <option value="kaida">Kaida</option>
+              <option value="rela">Rela</option>
+              <option value="tukda">Tukda</option>
+            </select>
+            
+            <div class="format-group" id="nsFormatGroup">
+              <!-- Rendered contextually -->
+            </div>
+          </div>
+
+          <!-- Document Area -->
+          <div class="notation-document-wrapper">
+            <div class="notation-document" id="nsDocument">
+              <div class="doc-header">
+                <input type="text" id="nsTitle" class="doc-title-input" value="Untitled Composition" placeholder="Composition Title">
+              </div>
+              <div class="dynamic-grid" id="nsGrid">
+                <!-- Virtual DOM renders here -->
+              </div>
+            </div>
+            <div style="text-align: center; margin-top: 1rem; margin-bottom: 2rem;">
+              <button id="nsAddRowBtn" class="selector-btn" style="border: 1px dashed var(--gold); color: var(--gold); background: rgba(212,175,55,0.05); font-family: 'Cinzel', serif; padding: 12px 32px;">+ Add Line</button>
+            </div>
+          </div>
+
+        </main>
+      </section>
+    </div> <!-- End view-notation -->
+  
 
   </main>
+
+  <!-- NOTATION TUTORIAL MODAL -->
+  <div class="modal-overlay" id="nsTutorialModal">
+    <div class="modal-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
+      <h2 style="color: var(--gold); margin-bottom: 1rem; border-bottom: 1px solid #333; padding-bottom: 0.5rem;">Notation Studio Guide</h2>
+      
+      <h3 style="margin-top: 1rem; color: #fff;">1. Adding Compositions</h3>
+      <p style="color: #ccc; margin-bottom: 1rem; line-height: 1.5;">
+        Click any cell in the grid to select it. Once selected, you can:
+        <br>- Type directly using your keyboard.
+        <br>- Click items in the left <strong>Palette</strong> to insert them automatically.
+        <br>- Use the <strong>Template</strong> dropdown in the toolbar to load a sample composition instantly.
+      </p>
+
+      <h3 style="margin-top: 1rem; color: #fff;">2. Formatting (Vocal & Tabla)</h3>
+      <p style="color: #ccc; margin-bottom: 1rem; line-height: 1.5;">
+        Select text inside a cell and use the top toolbar formatting buttons to apply standard Indian Classical notation marks:
+        <br>- <strong>Mandra (M) / Taar (T):</strong> Dots below or above the note.
+        <br>- <strong>Komal (K) / Tivra (T):</strong> Underlines or vertical lines.
+        <br>- <strong>Double (D):</strong> Group notes together with a bottom curve (crescent).
+      </p>
+
+      <h3 style="margin-top: 1rem; color: #fff;">3. Playback</h3>
+      <p style="color: #ccc; margin-bottom: 1rem; line-height: 1.5;">
+        Click <strong>PLAY</strong> to hear a synthesized playback of your notation. It reads exactly what you've typed, matching the selected language and formatting!
+      </p>
+
+      <div style="text-align: center; margin-top: 2rem;">
+        <button id="nsTutorialClose" class="selector-btn active" style="padding: 12px 32px;">Got it</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Hidden tanpura audio element -->
   <audio id="tanpuraAudio" src="/assets/tanpura_06_01.wav" loop crossorigin="anonymous" preload="none"></audio>
@@ -361,8 +535,9 @@
     </div>
   </div>
 
-  <script src="catalogue.js"></script>
-  <script src="app.js"></script>
+  <script src="catalogue.js?v=17"></script>
+  <script src="notation.js?v=17"></script>
+  <script src="app.js?v=17"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

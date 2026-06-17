@@ -1405,3 +1405,181 @@ function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+
+
+// ============================================================================
+// ========================== NEW VERTICALS LOGIC =============================
+// ============================================================================
+
+// ── SPA Navigation ──
+document.querySelectorAll('.nav-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    // Stop Lehra audio
+    if (typeof stopPlayback === 'function' && state && state.isPlaying) {
+      stopPlayback();
+    }
+    // Stop Mixer audio
+    if (mixerPlaying) stopMixer();
+    // Stop Notation audio (handled by notation.js engine now, but we don't have a global hook. For now, it will stop automatically or we can ignore it)
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.app-view').forEach(v => {
+      v.style.display = 'none';
+      v.classList.remove('active-view');
+    });
+    
+    const target = e.target.getAttribute('data-target');
+    e.target.classList.add('active');
+    const view = document.getElementById(target);
+    if(view) {
+        view.style.display = '';
+        view.classList.add('active-view');
+    }
+  });
+});
+
+// ── Stem Separator Logic ──
+
+let mixerAudioNodes = [];
+let mixerPlaying = false;
+let mixerAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+
+  // -- Upload Zone Events --
+  const uZone = document.getElementById('uploadZone');
+  const aUpload = document.getElementById('audioUpload');
+  if (uZone && aUpload) {
+    uZone.addEventListener('click', () => {
+      aUpload.click();
+    });
+    uZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uZone.style.borderColor = 'var(--gold)';
+    });
+    uZone.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      uZone.style.borderColor = '';
+    });
+    uZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uZone.style.borderColor = '';
+      if (e.dataTransfer.files.length > 0) {
+        aUpload.files = e.dataTransfer.files;
+        aUpload.dispatchEvent(new Event('change'));
+      }
+    });
+  }
+
+  document.getElementById('audioUpload')?.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  document.getElementById('uploadZone').style.display = 'none';
+  document.getElementById('processingZone').style.display = 'block';
+  document.getElementById('processingText').textContent = 'Uploading and processing stems... (this may take a few minutes)';
+  
+  const formData = new FormData();
+  formData.append('audio', file);
+  
+  try {
+    const res = await fetch('/api/separate', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await res.json();
+    
+    if (data.error) throw new Error(data.error);
+    
+    document.getElementById('processingZone').style.display = 'none';
+    document.getElementById('mixerZone').style.display = 'block';
+    
+    renderMixerTracks(data.stems); 
+    
+  } catch (err) {
+    alert("Error processing file: " + err.message);
+    document.getElementById('processingZone').style.display = 'none';
+    document.getElementById('uploadZone').style.display = 'block';
+  }
+});
+
+async function renderMixerTracks(stems) {
+  const container = document.getElementById('mixerTracks');
+  container.innerHTML = '';
+  mixerAudioNodes = [];
+  
+  for (const [name, url] of Object.entries(stems)) {
+    const trackDiv = document.createElement('div');
+    trackDiv.className = 'mixer-track';
+    
+    const label = document.createElement('span');
+    label.className = 'track-name';
+    label.textContent = name;
+    
+    const volWrap = document.createElement('div');
+    volWrap.className = 'vol-slider-wrap';
+    volWrap.style.flex = '1';
+    
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = '0';
+    slider.max = '100';
+    slider.value = '80';
+    slider.className = 'vol-slider';
+    
+    const muteBtn = document.createElement('button');
+    muteBtn.className = 'btn-mute';
+    muteBtn.textContent = 'MUTE';
+    
+    trackDiv.appendChild(label);
+    trackDiv.appendChild(volWrap);
+    volWrap.appendChild(slider);
+    trackDiv.appendChild(muteBtn);
+    container.appendChild(trackDiv);
+    
+    // Load audio
+    const audioEl = new Audio(url);
+    audioEl.crossOrigin = 'anonymous';
+    audioEl.loop = true;
+    const track = mixerAudioCtx.createMediaElementSource(audioEl);
+    const gainNode = mixerAudioCtx.createGain();
+    gainNode.gain.value = 0.8;
+    track.connect(gainNode).connect(mixerAudioCtx.destination);
+    
+    mixerAudioNodes.push({ el: audioEl, gain: gainNode });
+    
+    slider.addEventListener('input', (e) => {
+      if (!muteBtn.classList.contains('muted')) {
+        gainNode.gain.value = e.target.value / 100;
+      }
+    });
+    
+    muteBtn.addEventListener('click', () => {
+      muteBtn.classList.toggle('muted');
+      if (muteBtn.classList.contains('muted')) {
+        gainNode.gain.value = 0;
+      } else {
+        gainNode.gain.value = slider.value / 100;
+      }
+    });
+  }
+}
+
+document.getElementById('mixerPlayBtn')?.addEventListener('click', () => {
+  if (mixerAudioCtx.state === 'suspended') mixerAudioCtx.resume();
+  
+  if (mixerPlaying) {
+    stopMixer();
+  } else {
+    mixerAudioNodes.forEach(t => t.el.play());
+    document.getElementById('mixerPlayIcon').style.display = 'none';
+    document.getElementById('mixerPauseIcon').style.display = 'block';
+    mixerPlaying = true;
+  }
+});
+
+function stopMixer() {
+  mixerAudioNodes.forEach(t => t.el.pause());
+  document.getElementById('mixerPlayIcon').style.display = 'block';
+  document.getElementById('mixerPauseIcon').style.display = 'none';
+  mixerPlaying = false;
+}
+
