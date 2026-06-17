@@ -125,7 +125,7 @@ def pitch_shift_file(input_path: pathlib.Path, output_path: pathlib.Path, pitch_
             sr=sr,
             n_steps=n_semitones,
             bins_per_octave=12,
-            res_type='kaiser_fast'   # lower RAM footprint for 512MB servers
+            res_type='soxr_qq'   # lower RAM footprint for 512MB servers, soxr replaces resampy
         )
 
     log.info(f"  -> Processing complete, {len(y)/sr:.2f}s of audio")
@@ -145,6 +145,9 @@ def serve_audio():
         stretch = float(request.args.get('stretch', 1.0))
     except ValueError:
         return jsonify({'error': 'Invalid numerical parameter'}), 400
+
+    if pitch_hz <= 0 or stretch <= 0:
+        return jsonify({'error': 'hz and stretch must be positive'}), 400
 
     # Security: prevent path traversal
     if not filename or '..' in filename or '/' in filename or '\\' in filename:
@@ -183,6 +186,9 @@ def serve_tanpura():
     except ValueError:
         return jsonify({'error': 'Invalid numerical parameter'}), 400
 
+    if pitch_hz <= 0:
+        return jsonify({'error': 'hz must be positive'}), 400
+
     input_path = ASSETS_DIR / "tanpura_06_01.wav"
     if not input_path.exists():
         log.warning(f"Tanpura file not found: {input_path}")
@@ -214,7 +220,7 @@ def serve_tanpura():
                     sr=sr,
                     n_steps=n_semitones,
                     bins_per_octave=12,
-                    res_type='kaiser_best'
+                    res_type='soxr_hq'
                 )
                 sf.write(str(cache_path), y, sr, subtype='PCM_16')
                 log.info(f"  -> Saved to cache: {cache_path.name}")

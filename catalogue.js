@@ -10,7 +10,7 @@ const CATALOGUE = {
     taals: {
       // 7 beats
       "Roopak (7 beats)": {
-        beats: 7, minTempo: 60, maxTempo: 240,
+        beats: 7, taali: [4, 6], khali: [1], minTempo: 60, maxTempo: 240,
         tempos: [75, 90, 120, 150, 180],
         raags: {
           "Charukeshi": { file: "Sarangi_Roopak Taal_Charukeshi" }
@@ -18,7 +18,7 @@ const CATALOGUE = {
       },
       // 10 beats
       "Jhaptaal (10 beats)": {
-        beats: 10, minTempo: 30, maxTempo: 180,
+        beats: 10, taali: [1, 3, 8], khali: [6], minTempo: 30, maxTempo: 180,
         tempos: [40, 50, 60, 75, 90, 120, 150],
         raags: {
           "Bageshree": { file: "Sarangi_Jhaptaal_Bageshree" },
@@ -27,7 +27,7 @@ const CATALOGUE = {
       },
       // 13 beats
       "Jai Taal (13 beats)": {
-        beats: 13, minTempo: 45, maxTempo: 180,
+        beats: 13, taali: [1, 6, 11], khali: [8], minTempo: 45, maxTempo: 180,
         tempos: [50, 60, 75, 90, 120, 150],
         raags: {
           "Jog": { file: "Sarangi_Jai Taal_Jog" }
@@ -35,7 +35,7 @@ const CATALOGUE = {
       },
       // 15 beats
       "Pancham Sawari (15 beats)": {
-        beats: 15, minTempo: 60, maxTempo: 180,
+        beats: 15, taali: [1, 4, 12], khali: [8], minTempo: 60, maxTempo: 180,
         tempos: [75, 90, 120, 150],
         raags: {
           "Charukeshi": { file: "Sarangi_Pancham Sawari_Charukeshi" }
@@ -43,7 +43,7 @@ const CATALOGUE = {
       },
       // 16 beats
       "Teentaal (16 beats)": {
-        beats: 16, minTempo: 30, maxTempo: 500,
+        beats: 16, taali: [1, 5, 13], khali: [9], minTempo: 30, maxTempo: 500,
         tempos: [40, 50, 60, 75, 90, 120, 150, 180, 240, 320],
         raags: {
           "Bhairavi":      { file: "Sarangi_Teentaal_Bhairavi" },
@@ -67,7 +67,7 @@ const CATALOGUE = {
     taals: {
       // 7 beats
       "Roopak Taal (7 beats)": {
-        beats: 7, minTempo: 65, maxTempo: 240,
+        beats: 7, taali: [4, 6], khali: [1], minTempo: 65, maxTempo: 240,
         tempos: [75, 90, 120, 150, 180],
         raags: {
           "Kedar": { file: "Esraj_Roopak_Kedar" }
@@ -83,7 +83,7 @@ const CATALOGUE = {
       },
       // 13 beats
       "Jai Taal (13 beats)": {
-        beats: 13, minTempo: 50, maxTempo: 180,
+        beats: 13, taali: [1, 6, 11], khali: [8], minTempo: 50, maxTempo: 180,
         tempos: [60, 75, 90, 120, 150],
         raags: {
           "Alhayia Bilwal": { file: "Esraj_Jai Taal_Alhayia Bilwal" }
@@ -99,7 +99,7 @@ const CATALOGUE = {
       },
       // 16 beats
       "Teentaal (16 beats)": {
-        beats: 16, minTempo: 30, maxTempo: 500,
+        beats: 16, taali: [1, 5, 13], khali: [9], minTempo: 30, maxTempo: 500,
         tempos: [40, 50, 60, 75, 90, 120, 150, 180, 240, 300],
         raags: {
           "Chandrakauns": { file: "Esraj_Teentaal_Chandrakauns" },
@@ -121,7 +121,7 @@ const CATALOGUE = {
     taals: {
       // 7 beats
       "Roopak Taal (7 beats)": {
-        beats: 7, minTempo: 55, maxTempo: 240,
+        beats: 7, taali: [4, 6], khali: [1], minTempo: 55, maxTempo: 240,
         tempos: [75, 90, 120, 150, 180],
         raags: {
           "Patdeep": { file: "Harmonium_Roopak Taal_Patdeep" }
@@ -129,7 +129,7 @@ const CATALOGUE = {
       },
       // 10 beats (Jhaptaal)
       "Jhaptaal (10 beats)": {
-        beats: 10, minTempo: 30, maxTempo: 180,
+        beats: 10, taali: [1, 3, 8], khali: [6], minTempo: 30, maxTempo: 180,
         tempos: [40, 50, 60, 75, 90, 120],
         raags: {
           "Jaijawanti": { file: "Harmonium_Jhaptaal_Jaijawanti" },
@@ -138,7 +138,7 @@ const CATALOGUE = {
       },
       // 10 beats (Sool Taal)
       "Sool Taal (10 beats)": {
-        beats: 10, minTempo: 55, maxTempo: 180,
+        beats: 10, taali: [1, 5, 7], khali: [3, 9], minTempo: 55, maxTempo: 180,
         tempos: [50, 60, 75, 90, 120, 150],
         raags: {
           "Kedar": { file: "Harmonium_Sool Taal_Kedar" }
@@ -146,7 +146,7 @@ const CATALOGUE = {
       },
       // 12 beats
       "Ektaal (12 beats)": {
-        beats: 12, minTempo: 50, maxTempo: 240,
+        beats: 12, taali: [1, 5, 9, 11], khali: [3, 7], minTempo: 50, maxTempo: 240,
         tempos: [60, 75, 90, 120, 150, 180],
         raags: {
           "Gavti": { file: "Harmonium_Ek Taal_Gavti" }
@@ -154,7 +154,7 @@ const CATALOGUE = {
       },
       // 14 beats
       "Dhamar (14 beats)": {
-        beats: 14, minTempo: 55, maxTempo: 180,
+        beats: 14, taali: [1, 6, 11], khali: [8], minTempo: 55, maxTempo: 180,
         tempos: [50, 60, 75, 90, 120, 150],
         raags: {
           "Charukeshi": { file: "Harmonium_Dhamar_Charukeshi" }
@@ -162,7 +162,7 @@ const CATALOGUE = {
       },
       // 15 beats
       "Pancham Sawari (15 beats)": {
-        beats: 15, minTempo: 45, maxTempo: 180,
+        beats: 15, taali: [1, 4, 12], khali: [8], minTempo: 45, maxTempo: 180,
         tempos: [50, 60, 75, 90, 120, 150],
         raags: {
           "Chandrakauns": { file: "Harmonium_Pancham Sawari_Chandrakauns" }
@@ -170,7 +170,7 @@ const CATALOGUE = {
       },
       // 16 beats
       "Teentaal (16 beats)": {
-        beats: 16, minTempo: 30, maxTempo: 500,
+        beats: 16, taali: [1, 5, 13], khali: [9], minTempo: 30, maxTempo: 500,
         tempos: [40, 50, 60, 75, 90, 120, 150, 180, 240, 320],
         raags: {
           "Kirwani":        { file: "Harmonium_Teentaal_Kirwani" },
@@ -189,7 +189,7 @@ const CATALOGUE = {
     taals: {
       // 7 beats
       "Roopak Taal (7 beats)": {
-        beats: 7, minTempo: 60, maxTempo: 240,
+        beats: 7, taali: [4, 6], khali: [1], minTempo: 60, maxTempo: 240,
         tempos: [75, 90, 120, 150, 180],
         raags: {
           "Bageshree": { file: "Sitar_Roopak Taal_Bhageshree" }
@@ -197,7 +197,7 @@ const CATALOGUE = {
       },
       // 10 beats
       "Jhaptaal (10 beats)": {
-        beats: 10, minTempo: 30, maxTempo: 150,
+        beats: 10, taali: [1, 3, 8], khali: [6], minTempo: 30, maxTempo: 150,
         tempos: [40, 50, 60, 75, 90, 120],
         raags: {
           "Tilak Kamod":  { file: "Sitar_Jhaptaal_Tilak Kamod" },
@@ -214,7 +214,7 @@ const CATALOGUE = {
       },
       // 12 beats
       "Ektaal (12 beats)": {
-        beats: 12, minTempo: 50, maxTempo: 240,
+        beats: 12, taali: [1, 5, 9, 11], khali: [3, 7], minTempo: 50, maxTempo: 240,
         tempos: [60, 75, 90, 120, 150, 180],
         raags: {
           "Kedar": { file: "Sitar_Ektaal_Kedar" }
@@ -222,7 +222,7 @@ const CATALOGUE = {
       },
       // 13 beats
       "Jai Taal (13 beats)": {
-        beats: 13, minTempo: 45, maxTempo: 180,
+        beats: 13, taali: [1, 6, 11], khali: [8], minTempo: 45, maxTempo: 180,
         tempos: [50, 60, 75, 90, 120, 150],
         raags: {
           "Hindol": { file: "Sitar_Jai Taal_Hindol" }
@@ -238,7 +238,7 @@ const CATALOGUE = {
       },
       // 15 beats (Pancham Sawari)
       "Pancham Sawari (15 beats)": {
-        beats: 15, minTempo: 45, maxTempo: 180,
+        beats: 15, taali: [1, 4, 12], khali: [8], minTempo: 45, maxTempo: 180,
         tempos: [50, 60, 75, 90, 120, 150],
         raags: {
           "Hansadhwani": { file: "Sitar_Pancham Sawari_Hansadhwani" }
@@ -246,7 +246,7 @@ const CATALOGUE = {
       },
       // 16 beats
       "Teentaal (16 beats)": {
-        beats: 16, minTempo: 30, maxTempo: 500,
+        beats: 16, taali: [1, 5, 13], khali: [9], minTempo: 30, maxTempo: 500,
         tempos: [40, 50, 60, 75, 90, 120, 150, 180, 240, 320],
         raags: {
           "Bhimpalasi":    { file: "Sitar_Teentaal_Bhimpalashree" },

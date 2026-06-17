@@ -12,7 +12,8 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@300;400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=2" />
+  <link rel="manifest" href="manifest.json" />
 </head>
 
 <body>
@@ -262,6 +263,12 @@
               <option value="beep">Digital Beep</option>
               <option value="woodblock">Woodblock</option>
             </select>
+            <select id="metronomeSubdivisionSelect" class="pitch-select" style="padding: 3px 24px 3px 8px; font-size: 0.65rem; margin-left: 6px; border-radius: 4px; background-position: right 6px center; background-size: 8px;" title="Metronome Subdivisions">
+              <option value="1">1x</option>
+              <option value="2">2x</option>
+              <option value="3">3x (Triplets)</option>
+              <option value="4">4x</option>
+            </select>
           </div>
           <label class="toggle-label" title="Prevent screen from turning off during playback">
             <input type="checkbox" id="wakeLockToggle" class="toggle-checkbox" checked>
@@ -356,6 +363,15 @@
 
   <script src="catalogue.js"></script>
   <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(err => {
+          console.error('ServiceWorker registration failed: ', err);
+        });
+      });
+    }
+  </script>
 </body>
 
 </html>

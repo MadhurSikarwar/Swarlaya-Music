@@ -825,12 +825,15 @@ body {
   gap: 8px;
   cursor: pointer;
   user-select: none;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .toggle-checkbox { display: none; }
 .toggle-slider {
   position: relative;
   width: 32px;
   height: 18px;
+  flex-shrink: 0;
   background: rgba(255,255,255,0.06);
   border-radius: 9px;
   border: 1px solid var(--border);
@@ -860,6 +863,7 @@ body {
   font-size: 0.75rem;
   color: var(--text-sub);
   letter-spacing: 0.04em;
+  white-space: nowrap;
   transition: color var(--transition);
 }
 .toggle-checkbox:checked ~ .toggle-text {
@@ -893,6 +897,16 @@ body {
   background: rgba(245,166,35,0.28);
   border-color: var(--gold);
   width: 14px; height: 14px;
+}
+.beat-dot.taali {
+  background: rgba(245,166,35,0.15);
+  border-color: rgba(245,166,35,0.4);
+  width: 12px; height: 12px;
+}
+.beat-dot.khali {
+  background: transparent;
+  border-color: rgba(255,255,255,0.15);
+  border-style: dashed;
 }
 .beat-dot.active {
   background: var(--gold) !important;
