@@ -2,10 +2,10 @@ const CACHE_NAME = 'lehra-studio-v10';
 const ASSETS = [
   './',
   './index.html',
-  './style.css',
-  './notation.js',
-  './app.js',
-  './catalogue.js',
+  './public/css/style.css',
+  './public/js/notation.js',
+  './public/js/app.js',
+  './public/js/catalogue.js',
   './assets/Metronome.aac',
   './assets/MetronomeUp.aac',
   './assets/tanpura_06_01.wav'

@@ -452,6 +452,7 @@ async function updateTanpuraPitch() {
     if (!res.ok) throw new Error(res.statusText);
     const arrayBuf = await res.arrayBuffer();
     const decoded = await audioCtx.decodeAudioData(arrayBuf);
+    applyQuickFades(decoded);
     if (currentFetchId !== tanpuraFetchId) return;
     tanpuraBuffer = decoded;
     tanpuraBufferHz = state.pitchHz;
@@ -540,14 +541,13 @@ function getAudioUrl() {
   const segments = computeSegments(state.taalData);
   const seg = closestSegment(state.bpm, segments);
   const stretch = state.bpm / seg.presetBpm;
-
-  // effectiveHz corrects for each instrument's recording tuning offset.
-  // e.g. Sarangi: tuningCoeff=1.05945651 → at D (146.83 Hz) the server shifts
-  // to 146.83/1.05945651 ≈ 138.59 Hz target, which brings the Sarangi
-  // recording (naturally at ~155.56 Hz) back into unison with the tanpura.
   const effectiveHz = getEffectiveLehraHz();
 
-  return `/api/audio?file=${encodeURIComponent(raagData.file)}&hz=${effectiveHz.toFixed(6)}&start=${seg.start}&end=${seg.end}&stretch=${stretch}`;
+  // Request 50ms of extra audio for seamlessly crossfading the loop boundary
+  const fadeSec = 0.05;
+  const reqEnd = seg.end + (fadeSec * stretch);
+
+  return `/api/audio?file=${encodeURIComponent(raagData.file)}&hz=${effectiveHz.toFixed(6)}&start=${seg.start}&end=${reqEnd}&stretch=${stretch}`;
 }
 
 // ── Compute segment layout from taalData ─────────────────────────
@@ -616,7 +616,7 @@ async function cacheAudio(url, arrayBuffer) {
 }
 
 // ── Fetch + Decode audio ──────────────────────────────────────────
-async function fetchAndDecode(url) {
+async function fetchAndDecode(url, targetDurSec) {
   setStatus('Processing audio…', 'loading');
   setBadge('Processing…', true);
 
@@ -624,7 +624,8 @@ async function fetchAndDecode(url) {
   if (cachedBuf) {
     setStatus('Decoding audio…', 'loading');
     const copy = cachedBuf.slice(0); // slice prevents detaching the cached original
-    return await audioCtx.decodeAudioData(copy);
+    const decoded = await audioCtx.decodeAudioData(copy);
+    return applySeamlessFold(decoded, targetDurSec);
   }
 
   const res = await fetch(url);
@@ -639,7 +640,66 @@ async function fetchAndDecode(url) {
   // Cache it for next time
   await cacheAudio(url, arrayBuf.slice(0));
   
-  return await audioCtx.decodeAudioData(arrayBuf);
+  const decoded = await audioCtx.decodeAudioData(arrayBuf);
+  return applySeamlessFold(decoded, targetDurSec);
+}
+
+function applySeamlessFold(audioBuffer, targetDurSec) {
+  if (!targetDurSec) {
+    applyQuickFades(audioBuffer, 15);
+    return audioBuffer;
+  }
+  
+  const sampleRate = audioBuffer.sampleRate;
+  const targetLen = Math.floor(targetDurSec * sampleRate);
+  const fadeSamples = audioBuffer.length - targetLen;
+  
+  if (fadeSamples <= 100) {
+    applyQuickFades(audioBuffer, 15);
+    return audioBuffer;
+  }
+
+  const newBuffer = audioCtx.createBuffer(
+    audioBuffer.numberOfChannels,
+    targetLen,
+    sampleRate
+  );
+
+  for (let c = 0; c < audioBuffer.numberOfChannels; c++) {
+    const origData = audioBuffer.getChannelData(c);
+    const newData = newBuffer.getChannelData(c);
+    
+    for (let i = fadeSamples; i < targetLen; i++) {
+      newData[i] = origData[i];
+    }
+    
+    for (let i = 0; i < fadeSamples; i++) {
+      const t = i / fadeSamples;
+      const fadeIn = Math.sin(t * (Math.PI / 2));
+      const fadeOut = Math.cos(t * (Math.PI / 2));
+      
+      const startSample = origData[i];
+      const tailSample = origData[targetLen + i];
+      
+      newData[i] = startSample * fadeIn + tailSample * fadeOut;
+    }
+  }
+  return newBuffer;
+}
+
+function applyQuickFades(audioBuffer, fadeMs = 15) {
+  const sampleRate = audioBuffer.sampleRate;
+  const fadeSamples = Math.floor((fadeMs / 1000) * sampleRate);
+  if (fadeSamples * 2 > audioBuffer.length) return;
+  for (let c = 0; c < audioBuffer.numberOfChannels; c++) {
+    const data = audioBuffer.getChannelData(c);
+    const len = data.length;
+    for (let i = 0; i < fadeSamples; i++) {
+      const t = Math.sin((i / fadeSamples) * (Math.PI / 2));
+      data[i] *= t;
+      data[len - 1 - i] *= t;
+    }
+  }
 }
 
 // ── Create and start source node ─────────────────────────────────
@@ -713,7 +773,8 @@ async function loadAndPlay() {
     } else {
       lehraBuffer = null;
       lehraBufferUrl = null;
-      const buffer = await fetchAndDecode(url);
+      const targetDurSec = (state.taalData.beats * 60) / state.bpm;
+      const buffer = await fetchAndDecode(url, targetDurSec);
       if (currentFetchId !== lehraFetchId) return; // request overridden
       lehraBuffer = buffer;
       lehraBufferUrl = url;
@@ -833,7 +894,8 @@ function applyTempoChange() {
     const currentFetchId = ++lehraFetchId;
 
     try {
-      const buffer = await fetchAndDecode(url); // fetches in background!
+      const targetDurSec = (state.taalData.beats * 60) / state.bpm;
+      const buffer = await fetchAndDecode(url, targetDurSec); // fetches in background!
       if (currentFetchId !== lehraFetchId || !state.isPlaying) return;
 
       const oldSource = lehraSource; // capture just before hot-swapping
