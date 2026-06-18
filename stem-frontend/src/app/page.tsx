@@ -21,8 +21,9 @@ import {
 import axios from "axios";
 import WaveSurfer from "wavesurfer.js";
 
-const API_BASE = process.env.NODE_ENV === "development" ? "http://localhost:5000" : ""; // Hits the same host in prod
-
+const API_BASE = process.env.NODE_ENV === "development" 
+  ? "http://localhost:5000" 
+  : (process.env.NEXT_PUBLIC_API_BASE || ""); // Allows pointing to an external backend URL if frontend is hosted separately
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -408,7 +409,7 @@ function StemPlayer({ jobId, onReset, fileName }: { jobId: string, onReset: () =
           barRadius: 3,
           cursorWidth: 2,
           cursorColor: '#ffffff',
-          url: `${API_BASE}/api/stems/${jobId}/${stem}.wav`
+          url: `${API_BASE}/api/stems/${jobId}/${stem}.mp3`
         });
 
         ws.on('interaction', (newTime: number) => {

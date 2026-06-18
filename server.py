@@ -315,6 +315,7 @@ def process_audio(job_id: str, input_path: pathlib.Path):
             "--out", str(out_dir),
             "-n", "htdemucs_6s",
             "--float32",
+            "--mp3",
             "--shifts", "1",
             "--overlap", "0.25",
             str(input_path)
@@ -387,7 +388,7 @@ def process_audio(job_id: str, input_path: pathlib.Path):
         if not model_out_dir.exists():
             raise Exception("Output directory not found after separation.")
             
-        expected_stems = ["vocals.wav", "drums.wav", "bass.wav", "guitar.wav", "piano.wav", "other.wav"]
+        expected_stems = ["vocals.mp3", "drums.mp3", "bass.mp3", "guitar.mp3", "piano.mp3", "other.mp3"]
         for stem in expected_stems:
             stem_path = model_out_dir / stem
             if stem_path.exists():
@@ -469,7 +470,7 @@ def get_stem(job_id, stem_name):
     if not stem_path.exists():
         return jsonify({'error': 'Stem file not found'}), 404
         
-    response = send_file(stem_path, mimetype='audio/wav')
+    response = send_file(stem_path, mimetype='audio/mpeg')
     response.headers['Access-Control-Allow-Origin'] = '*'
     return response
 
