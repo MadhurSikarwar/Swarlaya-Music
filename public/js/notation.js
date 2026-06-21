@@ -470,39 +470,43 @@ function redo() {
 // 7. PDF/PNG Export
 function setupExport() {
   document.getElementById('nsExportBtn')?.addEventListener('click', () => {
-    const element = document.getElementById('nsDocument');
+    const originalElement = document.getElementById('nsDocument');
     const title = document.getElementById('nsTitle').value || 'Composition';
     
-    // Switch styling context temporarily to light theme printable styles
-    element.style.background = '#fff';
-    element.style.color = '#000';
-    document.querySelectorAll('.cell-content').forEach(c => c.style.color = '#000');
-    document.querySelectorAll('.tali-khali').forEach(c => c.style.color = '#000');
-    document.querySelectorAll('.doc-title-input').forEach(c => {
+    // Clone the element so we don't mutate the live DOM
+    const clone = originalElement.cloneNode(true);
+    clone.style.background = '#fff';
+    clone.style.color = '#000';
+    clone.querySelectorAll('.cell-content').forEach(c => c.style.color = '#000');
+    clone.querySelectorAll('.tali-khali').forEach(c => c.style.color = '#000');
+    clone.querySelectorAll('.doc-title-input').forEach(c => {
        c.style.color = '#000';
        c.style.border = 'none';
+       // We also want to copy the input value to the clone since cloneNode(true) might not copy input states
+       c.value = originalElement.querySelector('.doc-title-input').value;
     });
-    document.querySelectorAll('.grid-cell').forEach(c => c.style.borderColor = '#ccc');
-    document.querySelectorAll('.grid-vibhag').forEach(c => c.style.borderColor = '#000');
-    document.querySelectorAll('.grid-row').forEach(c => c.style.borderColor = '#000');
+    clone.querySelectorAll('.grid-cell').forEach(c => c.style.borderColor = '#ccc');
+    clone.querySelectorAll('.grid-vibhag').forEach(c => c.style.borderColor = '#000');
+    clone.querySelectorAll('.grid-row').forEach(c => c.style.borderColor = '#000');
+    
+    // Create a hidden container for the clone
+    const hiddenContainer = document.createElement('div');
+    hiddenContainer.style.position = 'absolute';
+    hiddenContainer.style.left = '-9999px';
+    hiddenContainer.style.top = '-9999px';
+    hiddenContainer.appendChild(clone);
+    document.body.appendChild(hiddenContainer);
     
     if (typeof html2pdf !== 'undefined') {
-        html2pdf().from(element).save(title + '.pdf').then(() => {
-          // Restore premium dark theme style variables
-          element.style.background = '';
-          element.style.color = '';
-          document.querySelectorAll('.cell-content').forEach(c => c.style.color = '');
-          document.querySelectorAll('.tali-khali').forEach(c => c.style.color = '');
-          document.querySelectorAll('.doc-title-input').forEach(c => {
-             c.style.color = '';
-             c.style.border = '';
-          });
-          document.querySelectorAll('.grid-cell').forEach(c => c.style.borderColor = '');
-          document.querySelectorAll('.grid-vibhag').forEach(c => c.style.borderColor = '');
-          document.querySelectorAll('.grid-row').forEach(c => c.style.borderColor = '');
+        html2pdf().from(clone).save(title + '.pdf').then(() => {
+          document.body.removeChild(hiddenContainer);
+        }).catch(err => {
+          console.error('PDF Export Error:', err);
+          document.body.removeChild(hiddenContainer);
         });
     } else {
         alert("html2pdf library is not loaded. Ensure you are connected to the internet.");
+        document.body.removeChild(hiddenContainer);
     }
   });
 }
@@ -607,6 +611,165 @@ function initNotationStudio() {
   
   // Save base history state
   saveHistory();
+  
+  // Hook up playback button
+  document.getElementById('nsPlayBtn')?.addEventListener('click', toggleNotationPlayback);
+}
+
+// 9. Notation Playback Engine
+let nsAudioCtx = null;
+let nsPlaying = false;
+let nsNextNoteTime = 0;
+let nsCurrentMatra = 0;
+let nsCurrentLine = 0;
+let nsTimerID = null;
+const nsLookahead = 25.0; // ms
+const nsScheduleAheadTime = 0.1; // s
+
+function getFrequency(swara) {
+  // Mapping based on D scale (146.83 Hz) roughly
+  const baseFreq = parseFloat(document.getElementById('fineTuneHz')?.value || 146.83);
+  const ratios = {
+    'sa': 1, 're': 9/8, 'ga': 5/4, 'ma': 4/3, 'pa': 3/2, 'dha': 5/3, 'ni': 15/8,
+    's': 1, 'r': 9/8, 'g': 5/4, 'm': 4/3, 'p': 3/2, 'd': 5/3, 'n': 15/8
+  };
+  let cleanSwara = translateToken(swara, 'en').toLowerCase().replace(/[̣̱̇॑]/g, '');
+  let ratio = ratios[cleanSwara] || 1;
+  return baseFreq * ratio;
+}
+
+function playTone(freq, time, dur) {
+  if (!nsAudioCtx) return;
+  const osc = nsAudioCtx.createOscillator();
+  const gain = nsAudioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(nsAudioCtx.destination);
+  osc.type = 'sine';
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.01, time);
+  gain.gain.exponentialRampToValueAtTime(0.5, time + 0.02);
+  gain.gain.setValueAtTime(0.5, time + dur - 0.05);
+  gain.gain.exponentialRampToValueAtTime(0.01, time + dur);
+  osc.start(time);
+  osc.stop(time + dur);
+}
+
+function playNoise(time, dur) {
+  if (!nsAudioCtx) return;
+  const bufferSize = nsAudioCtx.sampleRate * dur;
+  const buffer = nsAudioCtx.createBuffer(1, bufferSize, nsAudioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = Math.random() * 2 - 1;
+  }
+  const noise = nsAudioCtx.createBufferSource();
+  noise.buffer = buffer;
+  const gain = nsAudioCtx.createGain();
+  gain.gain.setValueAtTime(0.3, time);
+  gain.gain.exponentialRampToValueAtTime(0.01, time + dur);
+  noise.connect(gain);
+  gain.connect(nsAudioCtx.destination);
+  noise.start(time);
+}
+
+function nsScheduler() {
+  if (!nsPlaying) return;
+  while (nsNextNoteTime < nsAudioCtx.currentTime + nsScheduleAheadTime) {
+    nsScheduleNote(nsCurrentLine, nsCurrentMatra, nsNextNoteTime);
+    nsAdvanceNote();
+  }
+  nsTimerID = setTimeout(nsScheduler, nsLookahead);
+}
+
+function nsScheduleNote(lineIdx, matraIdx, time) {
+  if (lineIdx >= notationState.lines.length) return;
+  const matra = notationState.lines[lineIdx][matraIdx];
+  if (!matra || matra.content === '-' || matra.content === 'ऽ') return;
+  
+  setTimeout(() => {
+     document.querySelectorAll('.grid-cell .cell-content').forEach(el => {
+       el.style.background = '';
+       el.style.border = '';
+     });
+     const cells = document.querySelectorAll('.grid-row')[lineIdx]?.querySelectorAll('.cell-content');
+     if (cells && cells[matraIdx]) {
+       cells[matraIdx].style.background = 'rgba(245,166,35,0.15)';
+       cells[matraIdx].style.border = '1px dashed var(--gold)';
+     }
+  }, Math.max(0, (time - nsAudioCtx.currentTime) * 1000));
+
+  let bpm = 100;
+  const tempoVal = document.getElementById('tempoValue')?.textContent;
+  if (tempoVal && tempoVal !== '—') bpm = parseInt(tempoVal);
+  const dur = 60.0 / bpm;
+
+  const tokens = matra.content.split(' ').filter(t => t.trim() !== '');
+  if (notationState.mode === 'vocal') {
+    tokens.forEach((tok, i) => {
+       if (tok === '-' || tok === 'ऽ') return;
+       const f = getFrequency(tok);
+       let tokDur = dur / tokens.length;
+       let finalFreq = f;
+       if (matra.modifier === 'dot-above') finalFreq *= 2;
+       if (matra.modifier === 'dot-below') finalFreq /= 2;
+       if (matra.modifier === 'vertical') finalFreq *= 1.05946; // approx tivra/sharp
+       if (matra.modifier === 'underline') finalFreq /= 1.05946; // approx komal/flat
+       playTone(finalFreq, time + (i * tokDur), tokDur);
+    });
+  } else {
+    tokens.forEach((tok, i) => {
+       if (tok === '-' || tok === 'ऽ') return;
+       let tokDur = dur / tokens.length;
+       playNoise(time + (i * tokDur), tokDur);
+    });
+  }
+}
+
+function nsAdvanceNote() {
+  let bpm = 100;
+  const tempoVal = document.getElementById('tempoValue')?.textContent;
+  if (tempoVal && tempoVal !== '—') bpm = parseInt(tempoVal);
+  const secondsPerBeat = 60.0 / bpm;
+  
+  nsNextNoteTime += secondsPerBeat;
+  nsCurrentMatra++;
+  
+  const cols = TAAL_CONFIG[notationState.taal].matras;
+  if (nsCurrentMatra >= cols) {
+    nsCurrentMatra = 0;
+    nsCurrentLine++;
+    if (nsCurrentLine >= notationState.lines.length) {
+      nsCurrentLine = 0; // loop back to top
+    }
+  }
+}
+
+function toggleNotationPlayback() {
+  if (nsPlaying) {
+    nsPlaying = false;
+    clearTimeout(nsTimerID);
+    document.getElementById('nsPlayIcon').style.display = '';
+    document.getElementById('nsPauseIcon').style.display = 'none';
+    
+    document.querySelectorAll('.grid-cell .cell-content').forEach(el => {
+       el.style.background = '';
+       el.style.border = '';
+    });
+  } else {
+    if (!nsAudioCtx) {
+      nsAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (nsAudioCtx.state === 'suspended') {
+      nsAudioCtx.resume();
+    }
+    nsPlaying = true;
+    nsCurrentLine = 0;
+    nsCurrentMatra = 0;
+    nsNextNoteTime = nsAudioCtx.currentTime + 0.1;
+    document.getElementById('nsPlayIcon').style.display = 'none';
+    document.getElementById('nsPauseIcon').style.display = '';
+    nsScheduler();
+  }
 }
 
 // Boot up when ready

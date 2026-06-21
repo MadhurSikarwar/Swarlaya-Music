@@ -1537,10 +1537,11 @@ let mixerAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
   
   document.getElementById('uploadZone').style.display = 'none';
   document.getElementById('processingZone').style.display = 'block';
-  document.getElementById('processingText').textContent = 'Uploading and processing stems... (this may take a few minutes)';
+  const processingText = document.getElementById('processingText');
+  processingText.textContent = 'Uploading audio file...';
   
   const formData = new FormData();
-  formData.append('audio', file);
+  formData.append('file', file);
   
   try {
     const res = await fetch('/api/separate', {
@@ -1551,10 +1552,50 @@ let mixerAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
     
     if (data.error) throw new Error(data.error);
     
-    document.getElementById('processingZone').style.display = 'none';
-    document.getElementById('mixerZone').style.display = 'block';
+    const jobId = data.job_id;
+    processingText.textContent = 'Job queued. Waiting for server...';
     
-    renderMixerTracks(data.stems); 
+    // Polling function
+    const pollInterval = setInterval(async () => {
+      try {
+        const statusRes = await fetch(`/api/job_status/${jobId}`);
+        const statusData = await statusRes.json();
+        
+        if (statusData.error) {
+          clearInterval(pollInterval);
+          throw new Error(statusData.error);
+        }
+        
+        if (statusData.status === 'processing') {
+          const latestLog = statusData.logs && statusData.logs.length > 0 ? statusData.logs[statusData.logs.length - 1] : 'Processing...';
+          processingText.textContent = `Processing (${statusData.progress}%): ${latestLog}`;
+        } else if (statusData.status === 'completed') {
+          clearInterval(pollInterval);
+          
+          document.getElementById('processingZone').style.display = 'none';
+          document.getElementById('mixerZone').style.display = 'block';
+          
+          const stems = {
+            'Vocals': `/api/stems/${jobId}/vocals.mp3`,
+            'Drums': `/api/stems/${jobId}/drums.mp3`,
+            'Bass': `/api/stems/${jobId}/bass.mp3`,
+            'Guitar': `/api/stems/${jobId}/guitar.mp3`,
+            'Piano': `/api/stems/${jobId}/piano.mp3`,
+            'Other': `/api/stems/${jobId}/other.mp3`
+          };
+          
+          renderMixerTracks(stems); 
+        } else if (statusData.status === 'error') {
+          clearInterval(pollInterval);
+          throw new Error(statusData.error);
+        }
+      } catch (pollErr) {
+        clearInterval(pollInterval);
+        alert("Error polling job status: " + pollErr.message);
+        document.getElementById('processingZone').style.display = 'none';
+        document.getElementById('uploadZone').style.display = 'block';
+      }
+    }, 2000);
     
   } catch (err) {
     alert("Error processing file: " + err.message);
