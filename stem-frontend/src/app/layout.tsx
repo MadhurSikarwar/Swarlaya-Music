@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AI Stem Separator | Lehra Studio",
+  title: "AI Stem Separator | Swaralaya",
   description: "Extract vocals and instruments from any audio file using AI.",
 };
 
@@ -20,7 +20,7 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@300;400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap"
           rel="stylesheet"
         />
-        <link rel="stylesheet" href="/public/css/style.css" />
+        <link rel="stylesheet" href="/public/css/style.css?v=24" />
       </head>
       <body className="min-h-full flex flex-col">
         {/* Ambient Background Orbs */}
@@ -30,27 +30,29 @@ export default function RootLayout({
 
         {/* Header */}
         <header className="site-header">
-          <div className="logo">
-            <svg className="logo-icon" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="20" cy="20" r="18" stroke="url(#grad)" strokeWidth="2" />
-              <path d="M14 28V14l14 7-14 7z" fill="url(#grad)" />
-              <defs>
-                <linearGradient id="grad" x1="0" y1="0" x2="40" y2="40">
-                  <stop offset="0%" stopColor="#f5a623" />
-                  <stop offset="100%" stopColor="#e8572a" />
-                </linearGradient>
-              </defs>
-            </svg>
-            <div>
-              <span className="logo-title">Lehra Studio</span>
-              <span className="logo-sub">Indian Classical Practice</span>
+          <a href="/" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div className="logo">
+              <svg className="logo-icon" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="20" cy="20" r="18" stroke="url(#grad)" strokeWidth="2" />
+                <path d="M14 28V14l14 7-14 7z" fill="url(#grad)" />
+                <defs>
+                  <linearGradient id="grad" x1="0" y1="0" x2="40" y2="40">
+                    <stop offset="0%" stopColor="#f5a623" />
+                    <stop offset="100%" stopColor="#e8572a" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div>
+                <span className="logo-title">Swaralaya</span>
+                <span className="logo-sub">Indian Classical Practice</span>
+              </div>
             </div>
-          </div>
+          </a>
           
           <nav className="site-nav">
-            <a className="nav-btn" href="/" style={{textDecoration: 'none'}}>Lehra Player</a>
-            <a className="nav-btn active" href="/separator/" style={{textDecoration: 'none'}}>Stem Separator</a>
-            <a className="nav-btn" href="/" style={{textDecoration: 'none'}}>Notation Editor</a>
+            <a className="nav-btn" href="/carnatic" style={{textDecoration: 'none'}}>Carnatic</a>
+            <a className="nav-btn" href="/hindustani" style={{textDecoration: 'none'}}>Hindustani</a>
+            <a className="nav-btn active" href="/separator/" style={{textDecoration: 'none'}}>STEM</a>
           </nav>
           <div className="header-right">
             <div className="header-badge" id="loadingBadge">Web Player</div>

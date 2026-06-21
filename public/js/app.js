@@ -1474,29 +1474,124 @@ document.addEventListener('DOMContentLoaded', init);
 // ============================================================================
 
 // ── SPA Navigation ──
+function initNavigation() {
+  // First check URL search params (legacy)
+  const urlParams = new URLSearchParams(window.location.search);
+  let domain = urlParams.get('domain');
+  let path = window.location.pathname.replace(/^\/|\/$/g, ''); // strip slashes
+
+  if (domain === 'carnatic') {
+    navigateTo('view-carnatic', 'carnatic');
+    window.history.replaceState({target: 'view-carnatic', domain: 'carnatic'}, '', '/carnatic');
+  } else if (domain === 'hindustani') {
+    navigateTo('view-hindustani', 'hindustani');
+    window.history.replaceState({target: 'view-hindustani', domain: 'hindustani'}, '', '/hindustani');
+  } else if (path) {
+    // Path-based routing (virtual folders)
+    if (path === 'carnatic') navigateTo('view-carnatic', 'carnatic');
+    else if (path === 'hindustani') navigateTo('view-hindustani', 'hindustani');
+    else if (path === 'lehra') navigateTo('view-lehra', 'hindustani');
+    else if (path === 'notation') navigateTo('view-notation', 'hindustani');
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initNavigation);
+} else {
+  initNavigation();
+}
+
+// Handle internal navigation events from dashboard cards
+document.addEventListener('nav-internal', (e) => {
+  if (e.detail && e.detail.target) {
+    navigateTo(e.detail.target, e.detail.domain);
+    // Map targets to folder paths
+    let path = '/';
+    if (e.detail.target === 'view-carnatic') path = '/carnatic';
+    if (e.detail.target === 'view-hindustani') path = '/hindustani';
+    if (e.detail.target === 'view-lehra') path = '/lehra';
+    if (e.detail.target === 'view-notation') path = '/notation';
+    window.history.pushState({target: e.detail.target, domain: e.detail.domain}, '', path);
+  }
+});
+
+// Handle browser Back/Forward buttons
+window.addEventListener('popstate', (e) => {
+  if (e.state && e.state.target) {
+    navigateTo(e.state.target, e.state.domain, true);
+  } else {
+    // Fallback to home
+    navigateTo('view-home', null, true);
+  }
+});
+
+function navigateTo(target, domain, skipHistory = false) {
+  // Stop Lehra audio safely
+  if (typeof stopPlayback === 'function' && typeof state !== 'undefined' && state && state.isPlaying) {
+    stopPlayback();
+  }
+  // Stop Mixer audio
+  if (typeof mixerPlaying !== 'undefined' && mixerPlaying && typeof stopMixer === 'function') {
+    stopMixer();
+  }
+  
+  // Hide all views
+  document.querySelectorAll('.app-view').forEach(v => {
+    v.style.display = 'none';
+    v.classList.remove('active-view');
+  });
+  
+  // Remove active from nav-btns
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+
+  // Toggle Pitch Controls visibility
+  const pitchWrap = document.querySelector('.pitch-wrap');
+  if (pitchWrap) {
+    pitchWrap.style.display = target === 'view-lehra' ? 'flex' : 'none';
+  }
+  
+  // Show target view
+  const view = document.getElementById(target);
+  if(view) {
+      view.style.display = '';
+      view.classList.add('active-view');
+  }
+  
+  // If no domain provided, try to infer it from the target view
+  if (!domain && view) {
+    domain = view.getAttribute('data-domain');
+  }
+  
+  // Activate corresponding nav button
+  if (domain) {
+    const navBtn = document.querySelector(`.nav-btn[data-domain="${domain}"]`);
+    if (navBtn) navBtn.classList.add('active');
+  }
+}
+
 document.querySelectorAll('.nav-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
-    // Stop Lehra audio
-    if (typeof stopPlayback === 'function' && state && state.isPlaying) {
-      stopPlayback();
-    }
-    // Stop Mixer audio
-    if (mixerPlaying) stopMixer();
-    // Stop Notation audio (handled by notation.js engine now, but we don't have a global hook. For now, it will stop automatically or we can ignore it)
-    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.app-view').forEach(v => {
-      v.style.display = 'none';
-      v.classList.remove('active-view');
-    });
-    
-    const target = e.target.getAttribute('data-target');
-    e.target.classList.add('active');
-    const view = document.getElementById(target);
-    if(view) {
-        view.style.display = '';
-        view.classList.add('active-view');
+    const target = e.currentTarget.getAttribute('data-target');
+    if (target) {
+      e.preventDefault();
+      const domain = e.currentTarget.getAttribute('data-domain');
+      navigateTo(target, domain);
+      
+      let path = '/';
+      if (target === 'view-carnatic') path = '/carnatic';
+      if (target === 'view-hindustani') path = '/hindustani';
+      if (target === 'view-home') path = '/';
+      window.history.pushState({target, domain}, '', path);
     }
   });
+});
+
+window.addEventListener('nav-internal', (e) => {
+  navigateTo(e.detail.target, e.detail.domain);
+});
+
+window.addEventListener('nav-home', () => {
+  navigateTo('view-home');
 });
 
 // ── Stem Separator Logic ──
