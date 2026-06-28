@@ -56,6 +56,9 @@ const state = {
   // Options
   metronomeEnabled: false,
   metronomeSound: 'classic',
+  // true = Sam/Taali loud, Khali softer (recommended for riyaz)
+  // false = flat uniform click on every beat
+  metronomeAccents: true,
   wakeLockEnabled: true,
 
   // Riyaz
@@ -191,15 +194,15 @@ async function ensureAudioCtx() {
     };
   }
 
-  // Routing
-  // fxMasterMix -> Bass -> Treble
+  // Routing — reverb bypass: don't connect reverbNode yet, it connects
+  // only when the user raises the reverb slider above 0.
+  // fxMasterMix -> Bass -> Treble -> Dry path
   fxMasterMix.connect(filterBass);
   filterBass.connect(filterTreble);
   
-  // Split to Dry and Reverb
+  // Dry path only at startup (reverb is 0%)
   filterTreble.connect(dryGainNode);
-  filterTreble.connect(reverbNode);
-  reverbNode.connect(wetGainNode);
+  // Note: filterTreble.connect(reverbNode) happens lazily in fxReverb handler
   
   // Recombine into Compressor -> Analyser -> Destination
   dryGainNode.connect(masterCompressor);
@@ -287,18 +290,27 @@ function scheduleMetronome(time, beatIndex, subBeat = 0) {
   if (!state.metronomeEnabled) return;
   
   const matra = beatIndex + 1;
-  const isSam = matra === 1;
+  const isSam   = matra === 1;
   const isKhali = state.taalData?.khali?.includes(matra);
   const isTaali = state.taalData?.taali?.includes(matra);
+
+  // When accents are OFF: every beat is treated as a plain beat regardless
+  // of its taal position. Sam, Khali, and Taali all sound identical.
+  const useAccents = state.metronomeAccents;
+  // Sam (beat 1) is ALWAYS accented — it marks the top of the cycle.
+  // Only Taali/Khali differentiation is suppressed when accents are off.
+  const effectiveSam   = isSam;                   // always loud on 1
+  const effectiveTaali = useAccents && isTaali;
+  const effectiveKhali = useAccents && isKhali;
   
   if (state.metronomeSound === 'classic') {
     if (!metronomeBuffer || !metronomeUpBuffer) return;
     const src = audioCtx.createBufferSource();
-    src.buffer = (subBeat === 0 && (isSam || isTaali)) ? metronomeUpBuffer : metronomeBuffer;
+    src.buffer = (subBeat === 0 && (effectiveSam || effectiveTaali)) ? metronomeUpBuffer : metronomeBuffer;
     
     const srcGain = audioCtx.createGain();
     if (subBeat > 0) srcGain.gain.value = 0.3;
-    else if (isKhali) srcGain.gain.value = 0.4;
+    else if (effectiveKhali) srcGain.gain.value = 0.4;
     else srcGain.gain.value = 1.0;
     
     src.connect(srcGain);
@@ -310,16 +322,16 @@ function scheduleMetronome(time, beatIndex, subBeat = 0) {
     osc.type = 'sine';
     
     let freq = 440;
-    if (subBeat > 0) freq = 600;
-    else if (isSam) freq = 880;
-    else if (isTaali) freq = 660;
-    else if (isKhali) freq = 330;
+    if (subBeat > 0)         freq = 600;
+    else if (effectiveSam)   freq = 880;
+    else if (effectiveTaali) freq = 660;
+    else if (effectiveKhali) freq = 330;
     
     osc.frequency.value = freq;
     
     let vol = 1;
-    if (subBeat > 0) vol = 0.3;
-    else if (isKhali) vol = 0.5;
+    if (subBeat > 0)         vol = 0.3;
+    else if (effectiveKhali) vol = 0.5;
     
     env.gain.setValueAtTime(0, time);
     env.gain.linearRampToValueAtTime(vol, time + 0.01);
@@ -334,16 +346,16 @@ function scheduleMetronome(time, beatIndex, subBeat = 0) {
     osc.type = 'triangle';
     
     let freq = 800;
-    if (subBeat > 0) freq = 600;
-    else if (isSam) freq = 1000;
-    else if (isTaali) freq = 900;
-    else if (isKhali) freq = 700;
+    if (subBeat > 0)         freq = 600;
+    else if (effectiveSam)   freq = 1000;
+    else if (effectiveTaali) freq = 900;
+    else if (effectiveKhali) freq = 700;
     
     osc.frequency.value = freq;
     
     let vol = 1;
-    if (subBeat > 0) vol = 0.4;
-    else if (isKhali) vol = 0.6;
+    if (subBeat > 0)         vol = 0.4;
+    else if (effectiveKhali) vol = 0.6;
     
     env.gain.setValueAtTime(0, time);
     env.gain.linearRampToValueAtTime(vol, time + 0.005);
@@ -1039,7 +1051,14 @@ function buildTempoPanel(taalData) {
   $('tempoSliderWrap').style.display = '';
   buildSliderTicks(tempos, minTempo, maxTempo);
   syncSlider();
-  $('tempoValue').textContent = state.bpm;
+
+  // Sync the typed input range bounds when a new taal is selected
+  const tvEl = $('tempoValue');
+  if (tvEl) {
+    tvEl.min = minTempo;
+    tvEl.max = maxTempo;
+    tvEl.value = state.bpm;
+  }
 }
 
 function buildSliderTicks(tempos, minTempo, maxTempo) {
@@ -1082,7 +1101,9 @@ function syncSlider() {
   const slider = $('tempoSlider');
   slider.value = progress;
   slider.style.setProperty('--slider-pct', (progress / 210 * 100).toFixed(1) + '%');
-  $('tempoValue').textContent = state.bpm;
+  // tempoValue is now a <input type="number">, so use .value not .textContent
+  const tvEl = $('tempoValue');
+  if (tvEl) tvEl.value = state.bpm;
 
   const nearest = state.taalData.tempos.reduce((a, b) =>
     Math.abs(b - state.bpm) < Math.abs(a - state.bpm) ? b : a
@@ -1145,10 +1166,15 @@ $('tapTempoBtn').addEventListener('click', () => {
 });
 
 // ── Beat Flash ────────────────────────────────────────────────────
+// Pre-built array of beat dot elements, populated in renderBeatDots.
+// Avoids running querySelectorAll('.beat-dot') inside the 60fps drawBeatLoop.
+let beatDotEls = [];
+
 function renderBeatDots(beats) {
   const c = $('beatDots');
   c.innerHTML = '';
   state.beatIndex = 0;
+  beatDotEls = []; // reset cache
   for (let i = 0; i < beats; i++) {
     const d = document.createElement('div');
     const matra = i + 1;
@@ -1160,6 +1186,7 @@ function renderBeatDots(beats) {
     d.className = 'beat-dot' + extraClass;
     d.id = `bd-${i}`;
     c.appendChild(d);
+    beatDotEls.push(d); // cache reference
   }
 }
 
@@ -1200,7 +1227,8 @@ function startScheduler() {
 function stopScheduler() {
   if (timerWorker) timerWorker.postMessage("stop");
   if (drawBeatLoopFrame) { cancelAnimationFrame(drawBeatLoopFrame); drawBeatLoopFrame = null; }
-  document.querySelectorAll('.beat-dot').forEach(d => d.classList.remove('active'));
+  // Use cached refs — avoids a querySelectorAll on stop
+  beatDotEls.forEach(d => d.classList.remove('active'));
 }
 
 function drawBeatLoop() {
@@ -1228,9 +1256,9 @@ function drawBeatLoop() {
 }
 
 function flashBeat() {
-  document.querySelectorAll('.beat-dot').forEach(d => d.classList.remove('active'));
-  const d = $(`bd-${state.beatIndex}`);
-  if (d) d.classList.add('active');
+  // Use cached refs for both remove and add — no DOM queries at 60fps
+  beatDotEls.forEach(d => d.classList.remove('active'));
+  if (beatDotEls[state.beatIndex]) beatDotEls[state.beatIndex].classList.add('active');
 }
 
 function updateBeatTiming() {
@@ -1256,21 +1284,31 @@ function startWaveform() {
   if (!analyserNode || !canvas) return;
   const buf = new Uint8Array(analyserNode.frequencyBinCount);
 
+  // Cache the gradient once — recreating LinearGradient every frame at 60fps
+  // was wasting ~0.2ms per frame on the main thread.
+  const W = canvas.offsetWidth, H = canvas.offsetHeight;
+  let cachedGradient = null;
+  let cachedW = 0;
+
   function draw() {
     state.waveFrame = requestAnimationFrame(draw);
     analyserNode.getByteTimeDomainData(buf);
-    const W = canvas.offsetWidth, H = canvas.offsetHeight;
-    ctx2d.clearRect(0, 0, W, H);
+    const cW = canvas.offsetWidth, cH = canvas.offsetHeight;
+    ctx2d.clearRect(0, 0, cW, cH);
     ctx2d.lineWidth = 2;
-    const g = ctx2d.createLinearGradient(0, 0, W, 0);
-    g.addColorStop(0, '#f5a623');
-    g.addColorStop(1, '#e8572a');
-    ctx2d.strokeStyle = g;
+    // Rebuild gradient only when canvas width changes (e.g. on resize)
+    if (!cachedGradient || cW !== cachedW) {
+      cachedGradient = ctx2d.createLinearGradient(0, 0, cW, 0);
+      cachedGradient.addColorStop(0, '#f5a623');
+      cachedGradient.addColorStop(1, '#e8572a');
+      cachedW = cW;
+    }
+    ctx2d.strokeStyle = cachedGradient;
     ctx2d.beginPath();
-    const sl = W / buf.length;
+    const sl = cW / buf.length;
     for (let i = 0; i < buf.length; i++) {
       const x = i * sl;
-      const y = (buf[i] / 128) * H / 2;
+      const y = (buf[i] / 128) * cH / 2;
       i === 0 ? ctx2d.moveTo(x, y) : ctx2d.lineTo(x, y);
     }
     ctx2d.stroke();
@@ -1384,6 +1422,71 @@ function init() {
     else if (state.isPlaying) requestWakeLock();
   });
 
+  // Khali/Taali accents toggle
+  const accentsToggle = $('metronomeAccentsToggle');
+  if (accentsToggle) {
+    accentsToggle.addEventListener('change', e => {
+      state.metronomeAccents = e.target.checked;
+    });
+  }
+
+  // ── Typed Tempo Input ─────────────────────────────────────────────────
+  // The tempoValue element is now an <input type="number">. The user can:
+  //   • Type a BPM and press Enter (or Tab / click away) to commit
+  //   • Use Up/Down arrow keys inside the field to nudge ±1
+  const tempoInput = $('tempoValue');
+  if (tempoInput) {
+    // Commit on Enter key
+    tempoInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commitTypedBpm();
+        tempoInput.blur();
+      }
+      // Let ArrowUp/Down work as ±1, then prevent the global shortcut handler
+      // from also firing so we don't double-apply the change.
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.stopPropagation();
+        if (!state.taalData) return;
+        const delta = e.key === 'ArrowUp' ? 1 : -1;
+        setBpm(state.bpm + delta);
+        syncSlider();
+        applyTempoChange();
+      }
+    });
+
+    // Commit on blur (click away / Tab)
+    tempoInput.addEventListener('blur', () => {
+      commitTypedBpm();
+    });
+
+    // Live preview while typing (updates slider position in real-time)
+    tempoInput.addEventListener('input', () => {
+      const val = parseInt(tempoInput.value, 10);
+      if (!isNaN(val) && state.taalData) {
+        const { minTempo, maxTempo } = state.taalData;
+        if (val >= minTempo && val <= maxTempo) {
+          state.bpm = val;
+          // Update slider visually without triggering a server reload
+          const progress = bpmToProgress(state.bpm);
+          $('tempoSlider').value = progress;
+          $('tempoSlider').style.setProperty('--slider-pct', (progress / 210 * 100).toFixed(1) + '%');
+          updateNowPlaying();
+        }
+      }
+    });
+  }
+
+  function commitTypedBpm() {
+    if (!state.taalData) return;
+    const val = parseInt($('tempoValue').value, 10);
+    if (isNaN(val)) { syncSlider(); return; } // revert to last known BPM
+    setBpm(val);    // clamps to [minTempo, maxTempo]
+    syncSlider();   // updates slider + pill + tick highlights
+    applyTempoChange(); // triggers server reload if playing
+  }
+  // ──────────────────────────────────────────────────────────────────────
+
   // Studio FX Listeners
   const fxBass = $('fxBass');
   const fxTreble = $('fxTreble');
@@ -1410,10 +1513,27 @@ function init() {
   }
 
   if (fxReverb) {
+    // Track whether the reverb path is wired. When reverb=0 the ConvolverNode
+    // is fully disconnected so it processes zero audio frames (saves CPU).
+    let reverbActive = false;
+
     fxReverb.addEventListener('input', e => {
       const v = +e.target.value;
       const wet = v / 100;
-      const dry = 1 - (wet * 0.5); // lower dry slightly as wet increases
+      const dry = 1 - (wet * 0.5);
+
+      if (wet > 0 && !reverbActive) {
+        // Lazily wire the reverb path on first use
+        try { filterTreble.connect(reverbNode); } catch (_) {}
+        try { reverbNode.connect(wetGainNode); } catch (_) {}
+        reverbActive = true;
+      } else if (wet === 0 && reverbActive) {
+        // Fully remove reverb from graph when slider returns to 0
+        try { filterTreble.disconnect(reverbNode); } catch (_) {}
+        try { reverbNode.disconnect(wetGainNode); } catch (_) {}
+        reverbActive = false;
+      }
+
       if (wetGainNode) wetGainNode.gain.setTargetAtTime(wet, audioCtx.currentTime, 0.02);
       if (dryGainNode) dryGainNode.gain.setTargetAtTime(dry, audioCtx.currentTime, 0.02);
       $('fxReverbVal').textContent = v + '%';

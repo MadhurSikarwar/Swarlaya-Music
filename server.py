@@ -55,6 +55,7 @@ CACHE_DIR.mkdir(exist_ok=True)
 # ── Constants ───────────────────────────────────────────────────
 BASE_HZ    = 146.83   # D — the pitch all recordings were made at
 SAMPLE_RATE = 44100
+SIDECAR_URL = "http://localhost:3001"
 
 # (FFmpeg is required in system PATH for librosa/audioread to decode AAC files)
 # In Docker, this is installed via `apt-get install ffmpeg`.
@@ -121,6 +122,44 @@ def pitch_shift_file(input_path: pathlib.Path, output_path: pathlib.Path, pitch_
     duration = end - start if end > 0 else None
     log.info(f"Processing {input_path.name}: start={start:.2f}s, dur={duration}, stretch={stretch:.3f}x, pitch={n_semitones:.3f} semitones")
 
+    try:
+        import requests, tempfile
+        # Decode AAC to WAV and slice via ffmpeg first
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_wav:
+            temp_wav_path = temp_wav.name
+            
+        ffmpeg_cmd = ["ffmpeg", "-y", "-i", str(input_path)]
+        if start > 0:
+            ffmpeg_cmd.extend(["-ss", str(start)])
+        if duration is not None:
+            ffmpeg_cmd.extend(["-t", str(duration)])
+        ffmpeg_cmd.extend(["-ar", "44100", "-ac", "1", temp_wav_path])
+        
+        subprocess.run(ffmpeg_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+
+        resp = requests.post(
+            f"{SIDECAR_URL}/process_audio",
+            json={
+                "input": temp_wav_path,
+                "output": str(output_path),
+                "pitch_semitones": float(n_semitones),
+                "stretch": float(stretch)
+            },
+            timeout=30
+        )
+        resp.raise_for_status()
+        os.unlink(temp_wav_path)
+        log.info(f"  -> Processed via C++ sidecar: {output_path.name}")
+        return
+    except Exception as sidecar_err:
+        log.warning(f"C++ sidecar failed ({sidecar_err}). Falling back to librosa.")
+        try:
+            if 'temp_wav_path' in locals() and os.path.exists(temp_wav_path):
+                os.unlink(temp_wav_path)
+        except:
+            pass
+
+    # --- Fallback Librosa Implementation ---
     # Load only the required segment
     y, sr = librosa.load(str(input_path), sr=SAMPLE_RATE, mono=True, offset=start, duration=duration)
 
@@ -235,16 +274,33 @@ def serve_tanpura():
         if not cache_path.exists():
             try:
                 log.info(f"Processing tanpura: pitch={n_semitones:.3f} semitones")
-                y, sr = librosa.load(str(input_path), sr=SAMPLE_RATE, mono=True)
-                y = librosa.effects.pitch_shift(
-                    y,
-                    sr=sr,
-                    n_steps=n_semitones,
-                    bins_per_octave=12,
-                    res_type='soxr_hq'
-                )
-                sf.write(str(cache_path), y, sr, subtype='PCM_16')
-                log.info(f"  -> Saved to cache: {cache_path.name}")
+                
+                try:
+                    import requests
+                    resp = requests.post(
+                        f"{SIDECAR_URL}/process_audio",
+                        json={
+                            "input": str(input_path),
+                            "output": str(cache_path),
+                            "pitch_semitones": float(n_semitones),
+                            "stretch": 1.0
+                        },
+                        timeout=30
+                    )
+                    resp.raise_for_status()
+                    log.info(f"  -> Saved via C++ sidecar: {cache_path.name}")
+                except Exception as sidecar_err:
+                    log.warning(f"C++ sidecar failed ({sidecar_err}). Falling back to librosa.")
+                    y, sr = librosa.load(str(input_path), sr=SAMPLE_RATE, mono=True)
+                    y = librosa.effects.pitch_shift(
+                        y,
+                        sr=sr,
+                        n_steps=n_semitones,
+                        bins_per_octave=12,
+                        res_type='soxr_hq'
+                    )
+                    sf.write(str(cache_path), y, sr, subtype='PCM_16')
+                    log.info(f"  -> Saved to cache: {cache_path.name}")
             except Exception as e:
                 log.error(f"Tanpura pitch shift failed: {e}", exc_info=True)
                 return jsonify({'error': 'Audio processing failed', 'detail': str(e)}), 500
@@ -413,11 +469,60 @@ def process_audio(job_id: str, input_path: pathlib.Path):
                 stem_file = out_dir / stem
                 if stem_file.exists():
                     zipf.write(stem_file, arcname=stem)
+
+        # ── Waveform Peaks Generation ──────────────────────────────────────
+        # Pre-compute peaks server-side so the browser never has to decode
+        # audio files just to draw waveforms. Saves 6 parallel decodes.
+        # Target resolution: 800 data points per stem (plenty for a waveform).
+        PEAKS_RESOLUTION = 800
+        peaks_data = {}
+        stem_names = [s.replace(".mp3", "") for s in expected_stems]
+        stem_files_abs = [str(out_dir / f"{name}.mp3") for name in stem_names if (out_dir / f"{name}.mp3").exists()]
+        
+        try:
+            import requests
+            # Try to hit the C++ sidecar for true parallel processing
+            resp = requests.post(
+                f"{SIDECAR_URL}/peaks",
+                json={"files": stem_files_abs, "resolution": PEAKS_RESOLUTION},
+                timeout=30
+            )
+            resp.raise_for_status()
+            peaks_data = resp.json()
+            log.info(f"Peaks computed via C++ sidecar for {job_id}")
+        except Exception as sidecar_err:
+            log.warning(f"Sidecar unavailable or failed ({sidecar_err}). Falling back to librosa.")
+            # Fallback to sequential librosa computation
+            for stem_name in stem_names:
+                stem_file = out_dir / f"{stem_name}.mp3"
+                if stem_file.exists():
+                    try:
+                        y, _ = librosa.load(str(stem_file), sr=None, mono=True)
+                        chunk_size = max(1, len(y) // PEAKS_RESOLUTION)
+                        peaks = []
+                        for i in range(0, len(y), chunk_size):
+                            chunk = y[i:i + chunk_size]
+                            peaks.append(float(np.max(np.abs(chunk))))
+                        max_val = max(peaks) if peaks else 1.0
+                        if max_val > 0:
+                            peaks = [round(p / max_val, 4) for p in peaks]
+                        peaks_data[stem_name] = peaks[:PEAKS_RESOLUTION]
+                    except Exception as peaks_err:
+                        log.warning(f"Peaks generation failed for {stem_name}: {peaks_err}")
+                        peaks_data[stem_name] = []
+        
+        import json as _json
+        peaks_path = out_dir / "peaks.json"
+        with open(str(peaks_path), "w") as pf:
+            _json.dump(peaks_data, pf, separators=(",", ":"))
+        log.info(f"Waveform peaks saved for {job_id}")
+        # ──────────────────────────────────────────────────────────────────
                     
         jobs[job_id]["status"] = "completed"
         jobs[job_id]["progress"] = 100
         jobs[job_id]["output_dir"] = out_dir
         jobs[job_id]["zip_path"] = zip_path
+        jobs[job_id]["peaks_path"] = peaks_path
         log.info(f"Demucs processing complete for {job_id}")
         
     except Exception as e:
@@ -482,6 +587,30 @@ def get_stem(job_id, stem_name):
         return jsonify({'error': 'Stem file not found'}), 404
         
     response = send_file(stem_path, mimetype='audio/mpeg')
+    # Allow browser to cache stem files for 1 hour — avoids re-downloads on
+    # seek / reconnect while the user is on the player page.
+    response.headers['Cache-Control'] = 'public, max-age=3600'
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
+
+
+@app.route('/api/stems_peaks/<job_id>')
+def get_stems_peaks(job_id):
+    """Serve pre-computed waveform peaks JSON for all 6 stems.
+    
+    This lets WaveSurfer render waveforms instantly without decoding audio
+    on the client. The JSON is tiny (~30 KB) compared to 6 MP3 decodes.
+    """
+    if job_id not in jobs or jobs[job_id]["status"] != "completed":
+        return jsonify({'error': 'Job not ready or not found'}), 404
+    
+    peaks_path = jobs[job_id].get("peaks_path")
+    if not peaks_path or not pathlib.Path(str(peaks_path)).exists():
+        return jsonify({'error': 'Peaks not available'}), 404
+    
+    response = send_file(str(peaks_path), mimetype='application/json')
+    # Cache peaks for 1 hour — they are immutable for a given job.
+    response.headers['Cache-Control'] = 'public, max-age=3600'
     response.headers['Access-Control-Allow-Origin'] = '*'
     return response
 

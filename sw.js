@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lehra-studio-v16';
+const CACHE_NAME = 'lehra-studio-v18';
 const ASSETS = [
   './',
   './index.html',

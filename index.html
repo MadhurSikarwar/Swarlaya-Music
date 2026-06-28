@@ -299,7 +299,15 @@
 
         <div class="tempo-display-row">
           <div class="tempo-display">
-            <span id="tempoValue">—</span>
+            <input
+              type="number"
+              id="tempoValue"
+              class="tempo-value-input"
+              value="90"
+              min="20"
+              max="400"
+              title="Type a BPM value and press Enter"
+            />
             <span class="tempo-unit">BPM</span>
           </div>
           <button class="btn-tap" id="tapTempoBtn" title="Tap Tempo">TAP</button>
@@ -363,17 +371,24 @@
               <span class="toggle-slider"></span>
               <span class="toggle-text">Metronome</span>
             </label>
-            <select id="metronomeSoundSelect" class="pitch-select" style="padding: 3px 24px 3px 8px; font-size: 0.65rem; margin-left: 12px; border-radius: 4px; background-position: right 6px center; background-size: 8px;">
+          </div>
+          <div style="display:flex; align-items:center; gap: 6px; flex-wrap: wrap;">
+            <select id="metronomeSoundSelect" class="pitch-select" style="padding: 3px 24px 3px 8px; font-size: 0.65rem; border-radius: 4px; background-position: right 6px center; background-size: 8px;">
               <option value="classic">Classic</option>
               <option value="beep">Digital Beep</option>
               <option value="woodblock">Woodblock</option>
             </select>
-            <select id="metronomeSubdivisionSelect" class="pitch-select" style="padding: 3px 24px 3px 8px; font-size: 0.65rem; margin-left: 6px; border-radius: 4px; background-position: right 6px center; background-size: 8px;" title="Metronome Subdivisions">
+            <select id="metronomeSubdivisionSelect" class="pitch-select" style="padding: 3px 24px 3px 8px; font-size: 0.65rem; border-radius: 4px; background-position: right 6px center; background-size: 8px;" title="Metronome Subdivisions">
               <option value="1">1x</option>
               <option value="2">2x</option>
               <option value="3">3x (Triplets)</option>
               <option value="4">4x</option>
             </select>
+            <label class="toggle-label" title="Accent Sam, Taali and Khali differently (recommended for riyaz)" style="margin-left:4px;">
+              <input type="checkbox" id="metronomeAccentsToggle" class="toggle-checkbox" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-text" style="white-space:nowrap;">Khali/Taali Accents</span>
+            </label>
           </div>
           <label class="toggle-label" title="Prevent screen from turning off during playback">
             <input type="checkbox" id="wakeLockToggle" class="toggle-checkbox" checked>

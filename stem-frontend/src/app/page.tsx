@@ -384,33 +384,83 @@ function StemPlayer({ jobId, onReset, fileName }: { jobId: string, onReset: () =
   const [mutes, setMutes] = useState<{ [key: string]: boolean }>({ vocals: false, drums: false, bass: false, guitar: false, piano: false, other: false });
   const [solos, setSolos] = useState<{ [key: string]: boolean }>({ vocals: false, drums: false, bass: false, guitar: false, piano: false, other: false });
 
+  // Pre-computed waveform peaks from server — eliminates 6 parallel browser decodes
+  const [peaks, setPeaks] = useState<{ [key: string]: number[] } | null>(null);
+  const [peaksLoading, setPeaksLoading] = useState(true);
+
   const isSoloActive = Object.values(solos).some(s => s);
 
+  // Fetch pre-computed peaks once when the player mounts
   useEffect(() => {
+    let cancelled = false;
+    setPeaksLoading(true);
+    fetch(`${API_BASE}/api/stems_peaks/${jobId}`)
+      .then(res => {
+        if (!res.ok) throw new Error(`Peaks fetch failed: ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        if (!cancelled) {
+          setPeaks(data);
+          setPeaksLoading(false);
+        }
+      })
+      .catch(err => {
+        console.warn("Peaks not available, WaveSurfer will decode client-side:", err);
+        if (!cancelled) {
+          // Graceful fallback: set empty peaks so WaveSurfer decodes normally
+          setPeaks({});
+          setPeaksLoading(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [jobId]);
+
+  // Initialize WaveSurfer instances once peaks are available
+  useEffect(() => {
+    // Wait until the peaks response arrives (even if empty) before creating instances
+    if (peaksLoading) return;
+
     stems.forEach(stem => {
       if (containerRefs.current[stem] && !wsRefs.current[stem]) {
+        const stemColor: Record<string, { wave: string; progress: string }> = {
+          vocals: { wave: 'rgba(245, 166, 35, 0.2)',  progress: 'rgba(245, 166, 35, 1)' },
+          drums:  { wave: 'rgba(232, 87, 42, 0.2)',   progress: 'rgba(232, 87, 42, 1)' },
+          bass:   { wave: 'rgba(196, 125, 14, 0.2)',  progress: 'rgba(196, 125, 14, 1)' },
+          guitar: { wave: 'rgba(46, 204, 113, 0.2)',  progress: 'rgba(46, 204, 113, 1)' },
+          piano:  { wave: 'rgba(52, 152, 219, 0.2)',  progress: 'rgba(52, 152, 219, 1)' },
+          other:  { wave: 'rgba(255, 209, 102, 0.2)', progress: 'rgba(255, 209, 102, 1)' },
+        };
+        const colors = stemColor[stem] ?? stemColor.other;
+
+        const stemPeaks = peaks?.[stem];
+        const hasPeaks = Array.isArray(stemPeaks) && stemPeaks.length > 0;
+
         const ws = WaveSurfer.create({
           container: containerRefs.current[stem]!,
-          waveColor: stem === 'vocals' ? 'rgba(245, 166, 35, 0.2)' : 
-                     stem === 'drums' ? 'rgba(232, 87, 42, 0.2)' : 
-                     stem === 'bass' ? 'rgba(196, 125, 14, 0.2)' : 
-                     stem === 'guitar' ? 'rgba(46, 204, 113, 0.2)' : 
-                     stem === 'piano' ? 'rgba(52, 152, 219, 0.2)' : 
-                     'rgba(255, 209, 102, 0.2)',
-          progressColor: stem === 'vocals' ? 'rgba(245, 166, 35, 1)' : 
-                         stem === 'drums' ? 'rgba(232, 87, 42, 1)' : 
-                         stem === 'bass' ? 'rgba(196, 125, 14, 1)' : 
-                         stem === 'guitar' ? 'rgba(46, 204, 113, 1)' : 
-                         stem === 'piano' ? 'rgba(52, 152, 219, 1)' : 
-                         'rgba(255, 209, 102, 1)',
+          waveColor: colors.wave,
+          progressColor: colors.progress,
           height: 64,
           barWidth: 3,
           barGap: 2,
           barRadius: 3,
           cursorWidth: 2,
           cursorColor: '#ffffff',
-          url: `${API_BASE}/api/stems/${jobId}/${stem}.mp3`
+          // Use MediaElement backend when we have pre-computed peaks:
+          // — delegates playback/decoding to the native <audio> element (off main thread)
+          // — WaveSurfer draws the waveform instantly from the peaks array
+          // — falls back to WebAudio decode if peaks unavailable (same as before)
+          backend: hasPeaks ? 'MediaElement' : 'WebAudio',
         });
+
+        // Load with pre-computed peaks to skip client-side audio decoding
+        const url = `${API_BASE}/api/stems/${jobId}/${stem}.mp3`;
+        if (hasPeaks) {
+          // peaks is a flat array; WaveSurfer v7 expects [[peaksArray]] (2D for stereo support)
+          ws.load(url, [stemPeaks]);
+        } else {
+          ws.load(url);
+        }
 
         ws.on('interaction', (newTime: number) => {
           const progress = newTime / ws.getDuration();
@@ -434,7 +484,8 @@ function StemPlayer({ jobId, onReset, fileName }: { jobId: string, onReset: () =
         }
       });
     };
-  }, [jobId]);
+  // Re-run when peaks arrive (peaksLoading becomes false)
+  }, [jobId, peaksLoading]);
 
   useEffect(() => {
     stems.forEach(stem => {
@@ -543,7 +594,15 @@ function StemPlayer({ jobId, onReset, fileName }: { jobId: string, onReset: () =
               </div>
               
               <div className={`flex-1 w-full relative transition-opacity duration-300 ${isMuted ? 'opacity-30 grayscale' : 'opacity-100'}`}>
-                <div ref={el => { containerRefs.current[stem] = el; }} className="w-full" />
+                {/* Waveform loading skeleton shown while peaks are being fetched */}
+                {peaksLoading && (
+                  <div className="w-full h-16 rounded-lg bg-white/5 animate-pulse" />
+                )}
+                <div
+                  ref={el => { containerRefs.current[stem] = el; }}
+                  className="w-full"
+                  style={{ display: peaksLoading ? 'none' : 'block' }}
+                />
               </div>
             </div>
           )
@@ -552,3 +611,4 @@ function StemPlayer({ jobId, onReset, fileName }: { jobId: string, onReset: () =
     </div>
   );
 }
+

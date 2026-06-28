@@ -686,16 +686,44 @@ body {
   justify-content: space-between;
 }
 .tempo-display { display: flex; align-items: baseline; gap: 8px; }
-#tempoValue {
+#tempoValue,
+.tempo-value-input {
   font-family: 'Cinzel', serif;
   font-size: 3rem;
   font-weight: 700;
+  /* Gold gradient text — works on both <span> and <input> */
   background: linear-gradient(135deg, var(--gold), var(--orange));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   line-height: 1;
   transition: color 0.1s ease;
+}
+
+/* Input-specific overrides */
+.tempo-value-input {
+  border: none;
+  outline: none;
+  background-color: transparent; /* don't override gradient clip */
+  width: 5ch;          /* wide enough for 3-digit BPM */
+  padding: 0;
+  text-align: center;
+  cursor: text;
+  caret-color: var(--gold);
+  -moz-appearance: textfield; /* Firefox: hide spinners */
+}
+/* Chrome/Safari: hide spinner arrows */
+.tempo-value-input::-webkit-inner-spin-button,
+.tempo-value-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+/* Subtle focus ring so user knows it's interactive */
+.tempo-value-input:focus {
+  -webkit-text-fill-color: var(--gold);
+  background: none;
+  outline: none;
+  border-bottom: 1.5px solid rgba(245,166,35,0.5);
 }
 .tempo-unit {
   font-size: 0.82rem;
