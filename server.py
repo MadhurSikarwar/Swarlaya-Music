@@ -116,14 +116,16 @@ threading.Thread(target=cleanup_cache_thread, daemon=True).start()
 
 def pitch_shift_file(input_path: pathlib.Path, output_path: pathlib.Path, pitch_hz: float, start: float, end: float, stretch: float):
     """
-    Extract segment, time-stretch to target tempo, and pitch-shift to the target pitch.
+    Extract segment, time-stretch to target tempo, and pitch-shift to the target pitch using Pedalboard (C++ native).
     """
     n_semitones = 12 * math.log2(pitch_hz / BASE_HZ)
     duration = end - start if end > 0 else None
     log.info(f"Processing {input_path.name}: start={start:.2f}s, dur={duration}, stretch={stretch:.3f}x, pitch={n_semitones:.3f} semitones")
 
     try:
-        import requests, tempfile
+        import tempfile
+        from pedalboard import time_stretch
+        
         # Decode AAC to WAV and slice via ffmpeg first
         with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_wav:
             temp_wav_path = temp_wav.name
@@ -137,54 +139,42 @@ def pitch_shift_file(input_path: pathlib.Path, output_path: pathlib.Path, pitch_
         
         subprocess.run(ffmpeg_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
 
-        resp = requests.post(
-            f"{SIDECAR_URL}/process_audio",
-            json={
-                "input": temp_wav_path,
-                "output": str(output_path),
-                "pitch_semitones": float(n_semitones),
-                "stretch": float(stretch)
-            },
-            timeout=30
+        # 1. Load Audio
+        y, sr = sf.read(temp_wav_path)
+        
+        # 2. Time Stretch & Pitch Shift simultaneously in C++ via Pedalboard
+        # Pedalboard requires float32 shape (channels, samples), but for mono sf.read returns (samples,)
+        if y.ndim == 1:
+            y = np.expand_dims(y, axis=0) # Make it (1, samples)
+        y = y.astype(np.float32)
+
+        # Pedalboard handles both seamlessly!
+        y_processed = time_stretch(
+            y, 
+            sr, 
+            stretch_factor=stretch, 
+            pitch_shift_in_semitones=n_semitones,
+            high_quality=True
         )
-        resp.raise_for_status()
+
+        # 3. Save
+        # sf.write expects (samples, channels)
+        if y_processed.ndim == 2 and y_processed.shape[0] == 1:
+            y_processed = y_processed.squeeze(0)
+            
+        sf.write(str(output_path), y_processed, sr, subtype='PCM_16')
+        
         os.unlink(temp_wav_path)
-        log.info(f"  -> Processed via C++ sidecar: {output_path.name}")
+        log.info(f"  -> Processed via Pedalboard: {output_path.name}")
         return
-    except Exception as sidecar_err:
-        log.warning(f"C++ sidecar failed ({sidecar_err}). Falling back to librosa.")
+        
+    except Exception as e:
+        log.error(f"Processing failed: {e}")
         try:
             if 'temp_wav_path' in locals() and os.path.exists(temp_wav_path):
                 os.unlink(temp_wav_path)
         except:
             pass
-
-    # --- Fallback Librosa Implementation ---
-    # Load only the required segment
-    y, sr = librosa.load(str(input_path), sr=SAMPLE_RATE, mono=True, offset=start, duration=duration)
-
-    # 1. Time Stretch (Tempo)
-    if abs(stretch - 1.0) > 0.005:
-        log.info(f"  -> Time stretching by {stretch:.3f}x")
-        y = librosa.effects.time_stretch(y, rate=stretch)
-
-    # 2. Pitch Shift (Scale)
-    if abs(n_semitones) < 0.05:
-        log.info("  -> D original, no pitch shift")
-    else:
-        log.info(f"  -> Pitch shifting by {n_semitones:.3f} semitones")
-        y = librosa.effects.pitch_shift(
-            y,
-            sr=sr,
-            n_steps=n_semitones,
-            bins_per_octave=12,
-            res_type='soxr_qq'   # lower RAM footprint for 512MB servers, soxr replaces resampy
-        )
-
-    log.info(f"  -> Processing complete, {len(y)/sr:.2f}s of audio")
-
-    sf.write(str(output_path), y, sr, subtype='PCM_16')
-    log.info(f"  -> Saved to cache: {output_path.name}")
 
 
 # ── API Routes ───────────────────────────────────────────────────

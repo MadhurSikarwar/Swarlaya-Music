@@ -649,10 +649,15 @@ async function fetchAndDecode(url, targetDurSec) {
   setStatus('Decoding audio…', 'loading');
   const arrayBuf = await res.arrayBuffer();
   
-  // Cache it for next time
-  await cacheAudio(url, arrayBuf.slice(0));
+  if (arrayBuf.byteLength === 0) {
+      throw new Error("Received empty audio buffer from server");
+  }
   
-  const decoded = await audioCtx.decodeAudioData(arrayBuf);
+  const decoded = await audioCtx.decodeAudioData(arrayBuf.slice(0));
+  
+  // Cache ONLY if decode succeeds
+  await cacheAudio(url, arrayBuf);
+  
   return applySeamlessFold(decoded, targetDurSec);
 }
 

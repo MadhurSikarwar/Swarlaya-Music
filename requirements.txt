@@ -5,3 +5,4 @@ numpy==1.26.4
 gunicorn==22.0.0
 demucs==4.0.1
 requests==2.31.0
+pedalboard==0.9.23
