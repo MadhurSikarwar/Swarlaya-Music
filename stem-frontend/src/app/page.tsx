@@ -157,7 +157,7 @@ export default function Home() {
           <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tighter text-white mb-6 drop-shadow-lg font-cinzel uppercase px-2">
             AI Stem Separator
           </h1>
-          <p className="text-base sm:text-lg md:text-xl text-zinc-500 max-w-[540px] mx-auto text-center font-light leading-relaxed px-4">
+          <p className="text-base sm:text-lg md:text-xl text-zinc-500 max-w-[540px] mx-auto self-center text-center font-light leading-relaxed px-4">
             Extract studio-quality vocals, drums, bass, guitar, piano, and other instruments from any audio file instantly. Powered by state-of-the-art Hybrid Demucs deep learning.
           </p>
         </motion.div>
