@@ -21,6 +21,7 @@ Audio flow:
 """
 
 import os
+import re
 import hashlib
 import pathlib
 import logging
@@ -57,6 +58,19 @@ BASE_HZ    = 146.83   # D — the pitch all recordings were made at
 SAMPLE_RATE = 44100
 SIDECAR_URL = "http://localhost:3001"
 
+# Allowed stem file names for the mixer API — prevents path traversal via stem_name
+ALLOWED_STEMS = {"vocals.mp3", "drums.mp3", "bass.mp3", "guitar.mp3", "piano.mp3", "other.mp3"}
+
+# Valid UUID4 pattern — used to validate job_id before using it in filesystem paths
+_UUID_RE = re.compile(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+    re.IGNORECASE
+)
+
+def is_valid_job_id(job_id: str) -> bool:
+    """Return True only if job_id matches a strict UUID4 pattern."""
+    return bool(_UUID_RE.match(job_id))
+
 # (FFmpeg is required in system PATH for librosa/audioread to decode AAC files)
 # In Docker, this is installed via `apt-get install ffmpeg`.
 
@@ -85,15 +99,27 @@ def get_file_lock(filepath: pathlib.Path) -> threading.Lock:
         return file_locks[path_str]
 
 def cleanup_cache_thread():
-    """Background thread to keep audio_cache under 500MB (cleans to 400MB)."""
+    """Background thread to keep audio_cache under 500MB (cleans to 400MB).
+    
+    FIX: Each file is now deleted only after acquiring its per-file lock,
+    preventing mid-transfer deletions when a client is actively reading the file.
+    """
     while True:
         try:
             total_size = sum(f.stat().st_size for f in CACHE_DIR.glob('*.ogg') if f.is_file())
             if total_size > 500 * 1024 * 1024: # 500 MB
                 log.info(f"Cache size ({total_size / 1024 / 1024:.1f} MB) exceeded 500MB. Cleaning up...")
                 files = sorted(CACHE_DIR.glob('*.ogg'), key=lambda x: x.stat().st_atime)
-                
+
                 for f in files:
+                    # FIX: Acquire the file's lock before deleting — ensures no active
+                    # send_file() call is mid-transfer when we unlink the file.
+                    lock = get_file_lock(f)
+                    acquired = lock.acquire(blocking=False)
+                    if not acquired:
+                        # File is currently being written or served — skip it this cycle
+                        log.debug(f"Skipping locked cache file: {f.name}")
+                        continue
                     try:
                         sz = f.stat().st_size
                         f.unlink()
@@ -103,78 +129,116 @@ def cleanup_cache_thread():
                             break
                     except Exception as e:
                         log.warning(f"Failed to delete {f}: {e}")
+                    finally:
+                        lock.release()
+
                 log.info(f"Cleanup finished. New size: {total_size / 1024 / 1024:.1f} MB")
         except Exception as e:
             log.error(f"Cache cleanup error: {e}", exc_info=True)
-        
+
         time.sleep(60) # check every minute
 
 # Start cleanup thread
 threading.Thread(target=cleanup_cache_thread, daemon=True).start()
 
 
+# ── Concurrency Limiter for Heavy Audio Jobs ─────────────────────
+# Prevents the server from being DoS'd by many simultaneous stem separations or
+# pitch-shift jobs. At most MAX_CONCURRENT_JOBS background jobs run at once.
+MAX_CONCURRENT_JOBS = 2
+_job_semaphore = threading.Semaphore(MAX_CONCURRENT_JOBS)
+
 
 def pitch_shift_file(input_path: pathlib.Path, output_path: pathlib.Path, pitch_hz: float, start: float, end: float, stretch: float):
     """
-    Extract segment, time-stretch to target tempo, and pitch-shift to the target pitch using Pedalboard (C++ native).
-    Streams directly in memory (zero disk I/O), applies seamless loop fading, and compresses to OGG Vorbis.
+    Extract segment, time-stretch to target tempo, and pitch-shift to the target pitch using C++ sidecar (or Pedalboard as fallback).
+    Applies seamless loop fading, and compresses to OGG Vorbis.
     """
     n_semitones = 12 * math.log2(pitch_hz / BASE_HZ)
     duration = end - start if end > 0 else None
     log.info(f"Processing {input_path.name}: start={start:.2f}s, dur={duration}, stretch={stretch:.3f}x, pitch={n_semitones:.3f} semitones")
 
+    import tempfile
+    import requests
+
+    temp_in_path = tempfile.mktemp(suffix=".wav")
+    temp_out_path = tempfile.mktemp(suffix=".wav")
+
     try:
-        from pedalboard import time_stretch
-        
-        # Stream AAC to raw f32le PCM in memory via ffmpeg stdout
+        # First, extract segment to a temporary WAV for the sidecar
         ffmpeg_cmd = ["ffmpeg", "-y", "-i", str(input_path)]
         if start > 0:
             ffmpeg_cmd.extend(["-ss", str(start)])
         if duration is not None:
             ffmpeg_cmd.extend(["-t", str(duration)])
-        ffmpeg_cmd.extend(["-ar", "44100", "-ac", "1", "-f", "f32le", "-"])
-        
-        proc = subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-        raw_audio, _ = proc.communicate()
-        
-        if proc.returncode != 0 or len(raw_audio) == 0:
-            raise Exception("FFmpeg extraction failed or returned zero bytes")
+        ffmpeg_cmd.extend(["-ar", "44100", "-ac", "1", "-f", "wav", temp_in_path])
 
-        # 1. Load Audio from Memory
-        y = np.frombuffer(raw_audio, dtype=np.float32)
-        sr = 44100
-        
-        # 2. Time Stretch & Pitch Shift simultaneously in C++ via Pedalboard
-        y = np.expand_dims(y, axis=0) # Make it (1, samples)
+        subprocess.run(ffmpeg_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
 
-        y_processed = time_stretch(
-            y, 
-            sr, 
-            stretch_factor=stretch, 
-            pitch_shift_in_semitones=n_semitones,
-            high_quality=True
-        )
+        sidecar_success = False
+        try:
+            resp = requests.post(
+                f"{SIDECAR_URL}/process_audio",
+                json={
+                    "input": temp_in_path,
+                    "output": temp_out_path,
+                    "pitch_semitones": float(n_semitones),
+                    "tempo": float(1.0 / stretch) if stretch > 0 else 1.0
+                },
+                timeout=15
+            )
+            resp.raise_for_status()
+            sidecar_success = True
+            log.info(f"  -> Processed via C++ Sidecar: {output_path.name}")
+        except Exception as sidecar_err:
+            log.warning(f"Sidecar failed ({sidecar_err}). Falling back to pedalboard.")
 
-        if y_processed.ndim == 2 and y_processed.shape[0] == 1:
-            y_processed = y_processed.squeeze(0)
+        if sidecar_success:
+            # The sidecar outputs WAV. We need to load it, apply fade, and save to OGG.
+            y, sr = sf.read(temp_out_path, dtype='float32')
+            if y.ndim > 1: y = y.mean(axis=1) # Mono
 
-        # 3. Apply Server-Side Seamless Loop Fade (15ms)
-        # Replaces the CPU-heavy applySeamlessFold in JS
-        fade_ms = 15
-        fade_samples = int((fade_ms / 1000) * sr)
-        if fade_samples * 2 < len(y_processed):
-            t = np.sin(np.linspace(0, np.pi/2, fade_samples, dtype=np.float32))
-            y_processed[:fade_samples] *= t
-            y_processed[-fade_samples:] *= t[::-1]
-            
-        # 4. Save directly as highly compressed OGG Vorbis
-        sf.write(str(output_path), y_processed, sr, format='OGG', subtype='VORBIS')
-        
-        log.info(f"  -> Processed via Pedalboard (OGG): {output_path.name}")
-        return
-        
+            fade_ms = 15
+            fade_samples = int((fade_ms / 1000) * sr)
+            if fade_samples * 2 < len(y):
+                t = np.sin(np.linspace(0, np.pi/2, fade_samples, dtype=np.float32))
+                y[:fade_samples] *= t
+                y[-fade_samples:] *= t[::-1]
+
+            with sf.SoundFile(str(output_path), 'w', samplerate=sr, channels=1, format='OGG', subtype='VORBIS') as f:
+                chunk_size = 44100
+                for i in range(0, len(y), chunk_size):
+                    f.write(y[i:i+chunk_size])
+        else:
+            # Fallback to librosa
+            y, sr = sf.read(temp_in_path, dtype='float32')
+            if y.ndim > 1: y = y.mean(axis=1)
+
+            if stretch != 1.0:
+                y = librosa.effects.time_stretch(y, rate=stretch)
+            if n_semitones != 0.0:
+                y = librosa.effects.pitch_shift(y, sr=sr, n_steps=n_semitones)
+
+            fade_ms = 15
+            fade_samples = int((fade_ms / 1000) * sr)
+            if fade_samples * 2 < len(y):
+                t = np.sin(np.linspace(0, np.pi/2, fade_samples, dtype=np.float32))
+                y[:fade_samples] *= t
+                y[-fade_samples:] *= t[::-1]
+
+            # Fix for Windows stack overflow in libsndfile OGG encoder for large arrays:
+            with sf.SoundFile(str(output_path), 'w', samplerate=sr, channels=1, format='OGG', subtype='VORBIS') as f:
+                chunk_size = 44100
+                for i in range(0, len(y), chunk_size):
+                    f.write(y[i:i+chunk_size])
+
+            log.info(f"  -> Processed via Librosa (OGG): {output_path.name}")
+
     except Exception as e:
         log.error(f"Processing failed: {e}", exc_info=True)
+    finally:
+        pathlib.Path(temp_in_path).unlink(missing_ok=True)
+        pathlib.Path(temp_out_path).unlink(missing_ok=True)
 
 
 # ── API Routes ───────────────────────────────────────────────────
@@ -204,6 +268,15 @@ def serve_audio():
         return jsonify({'error': 'Invalid filename'}), 400
 
     input_path = ASSETS_DIR / f"{filename}.aac"
+
+    # FIX: Resolve the full path and assert it still lives under ASSETS_DIR
+    try:
+        resolved = input_path.resolve()
+        resolved.relative_to(ASSETS_DIR.resolve())
+    except ValueError:
+        log.warning(f"Path traversal attempt blocked: {filename}")
+        return jsonify({'error': 'Invalid filename'}), 400
+
     if not input_path.exists():
         log.warning(f"Audio file not found: {input_path}")
         return jsonify({'error': f'File not found: {filename}'}), 404
@@ -245,8 +318,6 @@ def serve_tanpura():
         return jsonify({'error': 'Tanpura file not found'}), 404
 
     n_semitones = 12 * math.log2(pitch_hz / BASE_HZ)
-    
-    # If practically no pitch shift needed, return the original file
     if abs(n_semitones) < 0.05:
         response = send_file(input_path, mimetype='audio/wav')
         response.headers['Cache-Control'] = 'public, max-age=86400'
@@ -255,7 +326,6 @@ def serve_tanpura():
 
     cache_path = get_cache_path("tanpura_06_01", pitch_hz, 0.0, 0.0, 1.0)
     lock = get_file_lock(cache_path)
-
     with lock:
         if cache_path.exists() and cache_path.stat().st_size < 1000:
             log.warning(f"Corrupted tanpura cache file found: {cache_path}. Deleting.")
@@ -263,42 +333,71 @@ def serve_tanpura():
 
         if not cache_path.exists():
             try:
-                log.info(f"Processing tanpura: pitch={n_semitones:.3f} semitones")
-                
-                try:
-                    import requests
-                    resp = requests.post(
-                        f"{SIDECAR_URL}/process_audio",
-                        json={
-                            "input": str(input_path),
-                            "output": str(cache_path),
-                            "pitch_semitones": float(n_semitones),
-                            "stretch": 1.0
-                        },
-                        timeout=30
-                    )
-                    resp.raise_for_status()
-                    log.info(f"  -> Saved via C++ sidecar: {cache_path.name}")
-                except Exception as sidecar_err:
-                    log.warning(f"C++ sidecar failed ({sidecar_err}). Falling back to librosa.")
-                    y, sr = librosa.load(str(input_path), sr=SAMPLE_RATE, mono=True)
-                    y = librosa.effects.pitch_shift(
-                        y,
-                        sr=sr,
-                        n_steps=n_semitones,
-                        bins_per_octave=12,
-                        res_type='soxr_hq'
-                    )
-                    sf.write(str(cache_path), y, sr, subtype='PCM_16')
-                    log.info(f"  -> Saved to cache: {cache_path.name}")
+                pitch_shift_file(input_path, cache_path, pitch_hz, 0.0, 0.0, 1.0)
             except Exception as e:
                 log.error(f"Tanpura pitch shift failed: {e}", exc_info=True)
                 return jsonify({'error': 'Audio processing failed', 'detail': str(e)}), 500
 
-    response = send_file(cache_path, mimetype='audio/wav')
+    response = send_file(cache_path, mimetype='audio/ogg')
     response.headers['Cache-Control'] = 'public, max-age=86400'
     response.headers['Access-Control-Allow-Origin'] = '*'
     return response
+
+@app.route('/api/tanpura_string')
+def serve_tanpura_string():
+    style = request.args.get('style', '1').strip()
+    string_id = request.args.get('string', '10').strip() # 10, 20, 40
+    try:
+        pitch_hz = float(request.args.get('hz', BASE_HZ))
+        tuning_offset = float(request.args.get('tuning', 0.0))
+    except ValueError:
+        return jsonify({'error': 'Invalid numerical parameter'}), 400
+
+    if pitch_hz <= 0 or style not in ['1', '2'] or string_id not in ['10', '20', '40']:
+        return jsonify({'error': 'Invalid parameters'}), 400
+
+    filename = f"tn{style}str{string_id}.wav"
+    input_path = ASSETS_DIR / filename
+
+    # FIX: Resolve and assert path lives under ASSETS_DIR
+    try:
+        resolved = input_path.resolve()
+        resolved.relative_to(ASSETS_DIR.resolve())
+    except ValueError:
+        log.warning(f"Path traversal attempt blocked on tanpura_string: {filename}")
+        return jsonify({'error': 'Invalid parameters'}), 400
+
+    if not input_path.exists():
+        log.warning(f"Tanpura string not found: {input_path}")
+        return jsonify({'error': 'File not found'}), 404
+
+    # Calculate total pitch shift.
+    TANPURA_DROID_BASE_HZ = 207.65
+    target_hz = pitch_hz
+    if string_id == '10':
+        target_hz = pitch_hz * (2 ** (tuning_offset / 12.0))
+
+    fake_target_hz = target_hz * (BASE_HZ / TANPURA_DROID_BASE_HZ)
+
+    cache_path = get_cache_path(f"tn{style}str{string_id}_{tuning_offset}", pitch_hz, 0.0, 0.0, 1.0)
+
+    lock = get_file_lock(cache_path)
+    with lock:
+        if cache_path.exists() and cache_path.stat().st_size < 1000:
+            cache_path.unlink()
+
+        if not cache_path.exists():
+            try:
+                pitch_shift_file(input_path, cache_path, fake_target_hz, 0.0, 0.0, 1.0)
+            except Exception as e:
+                log.error(f"Pitch shift failed: {e}", exc_info=True)
+                return jsonify({'error': 'Audio processing failed', 'detail': str(e)}), 500
+
+    response = send_file(cache_path, mimetype='audio/ogg')
+    response.headers['Cache-Control'] = 'public, max-age=86400'
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
+
 
 
 @app.route('/api/status')
@@ -358,227 +457,287 @@ app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
 # In-memory job store
 # { job_id: {"status": "processing", "progress": int, "output_dir": Path, "error": str, "zip_path": Path} }
 jobs = {}
+# FIX: Lock for all reads/writes to the jobs dict across threads
+jobs_lock = threading.Lock()
+
 
 def process_audio(job_id: str, input_path: pathlib.Path):
     try:
-        jobs[job_id]["status"] = "processing"
-        jobs[job_id]["progress"] = 10
-        
-        out_dir = STEMS_FOLDER / f"out_{job_id}"
-        out_dir.mkdir(parents=True, exist_ok=True)
-        
-        cmd = [
-            sys.executable, "-m", "demucs",
-            "--out", str(out_dir),
-            "-n", "htdemucs_6s",
-            "--float32",
-            "--mp3",
-            "--shifts", "1",
-            "--overlap", "0.25",
-            str(input_path)
-        ]
-        
-        jobs[job_id]["progress"] = 10
-        
-        log.info(f"Running Demucs for {job_id}...")
-        
-        # Run process and capture stdout/stderr in real-time
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, universal_newlines=True)
-        
-        # track what we've already logged to avoid duplicates
-        milestones = set()
+        # FIX: Acquire semaphore — blocks if MAX_CONCURRENT_JOBS jobs are already running.
+        # This prevents CPU/memory exhaustion from simultaneous demucs invocations.
+        acquired = _job_semaphore.acquire(timeout=600)  # Wait up to 10 minutes
+        if not acquired:
+            with jobs_lock:
+                jobs[job_id]["status"] = "error"
+                jobs[job_id]["error"] = "Server is busy. Please try again later."
+            return
 
-        for line in iter(process.stdout.readline, ''):
-            if not line:
-                break
-            clean_line = line.strip()
-            if clean_line:
-                # Try to parse real progress from Demucs tqdm output
-                if '%' in clean_line and '|' in clean_line:
-                    try:
-                        # Extract " 45%" from " 45%|████"
-                        pct_str = clean_line.split('%')[0].split()[-1]
-                        pct = int(pct_str)
-                        # Demucs processes shifts. We just loosely bind it to 10-95%
-                        jobs[job_id]["progress"] = min(95, max(10, pct))
-                        
-                        # Add cool artificial logs based on percentage!
-                        if pct >= 10 and 10 not in milestones:
-                            jobs[job_id]["logs"].append("Loading htdemucs_6s model weights...")
-                            milestones.add(10)
-                        if pct >= 20 and 20 not in milestones:
-                            jobs[job_id]["logs"].append("Model loaded. Analyzing spectral frequencies...")
-                            milestones.add(20)
-                        if pct >= 35 and 35 not in milestones:
-                            jobs[job_id]["logs"].append("Applying Hybrid Transformer layers...")
-                            milestones.add(35)
-                        if pct >= 50 and 50 not in milestones:
-                            jobs[job_id]["logs"].append("Separating harmonic and percussive components...")
-                            milestones.add(50)
-                        if pct >= 65 and 65 not in milestones:
-                            jobs[job_id]["logs"].append("Isolating vocals and drums...")
-                            milestones.add(65)
-                        if pct >= 80 and 80 not in milestones:
-                            jobs[job_id]["logs"].append("Extracting bass, guitar, and piano stems...")
-                            milestones.add(80)
-                        if pct >= 90 and 90 not in milestones:
-                            jobs[job_id]["logs"].append("Finalizing audio rendering and saving outputs...")
-                            milestones.add(90)
-                    except:
-                        pass
-                else:
-                    # Keep only non-tqdm logs (actual demucs text/warnings)
-                    jobs[job_id]["logs"].append(clean_line)
-
-                if len(jobs[job_id]["logs"]) > 100:
-                    jobs[job_id]["logs"].pop(0)
-
-        process.wait()
-        
-        if process.returncode != 0:
-            log.error(f"Demucs failed with return code {process.returncode}")
-            raise Exception(f"Demucs failed with return code {process.returncode}. Last logs: {jobs[job_id]['logs'][-5:]}")
-            
-        jobs[job_id]["progress"] = 99
-        
-        model_out_dir = out_dir / "htdemucs_6s" / input_path.stem
-        if not model_out_dir.exists():
-            raise Exception("Output directory not found after separation.")
-            
-        expected_stems = ["vocals.mp3", "drums.mp3", "bass.mp3", "guitar.mp3", "piano.mp3", "other.mp3"]
-        for stem in expected_stems:
-            stem_path = model_out_dir / stem
-            if stem_path.exists():
-                shutil.move(str(stem_path), str(out_dir / stem))
-                
-        shutil.rmtree(out_dir / "htdemucs_6s")
-        
-        zip_path = STEMS_FOLDER / f"{job_id}_stems.zip"
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for stem in expected_stems:
-                stem_file = out_dir / stem
-                if stem_file.exists():
-                    zipf.write(stem_file, arcname=stem)
-
-        # ── Waveform Peaks Generation ──────────────────────────────────────
-        # Pre-compute peaks server-side so the browser never has to decode
-        # audio files just to draw waveforms. Saves 6 parallel decodes.
-        # Target resolution: 800 data points per stem (plenty for a waveform).
-        PEAKS_RESOLUTION = 800
-        peaks_data = {}
-        stem_names = [s.replace(".mp3", "") for s in expected_stems]
-        stem_files_abs = [str(out_dir / f"{name}.mp3") for name in stem_names if (out_dir / f"{name}.mp3").exists()]
-        
         try:
-            import requests
-            # Try to hit the C++ sidecar for true parallel processing
-            resp = requests.post(
-                f"{SIDECAR_URL}/peaks",
-                json={"files": stem_files_abs, "resolution": PEAKS_RESOLUTION},
-                timeout=30
-            )
-            resp.raise_for_status()
-            peaks_data = resp.json()
-            log.info(f"Peaks computed via C++ sidecar for {job_id}")
-        except Exception as sidecar_err:
-            log.warning(f"Sidecar unavailable or failed ({sidecar_err}). Falling back to librosa.")
-            # Fallback to sequential librosa computation
-            for stem_name in stem_names:
-                stem_file = out_dir / f"{stem_name}.mp3"
-                if stem_file.exists():
-                    try:
-                        y, _ = librosa.load(str(stem_file), sr=None, mono=True)
-                        chunk_size = max(1, len(y) // PEAKS_RESOLUTION)
-                        peaks = []
-                        for i in range(0, len(y), chunk_size):
-                            chunk = y[i:i + chunk_size]
-                            peaks.append(float(np.max(np.abs(chunk))))
-                        max_val = max(peaks) if peaks else 1.0
-                        if max_val > 0:
-                            peaks = [round(p / max_val, 4) for p in peaks]
-                        peaks_data[stem_name] = peaks[:PEAKS_RESOLUTION]
-                    except Exception as peaks_err:
-                        log.warning(f"Peaks generation failed for {stem_name}: {peaks_err}")
-                        peaks_data[stem_name] = []
-        
-        import json as _json
-        peaks_path = out_dir / "peaks.json"
-        with open(str(peaks_path), "w") as pf:
-            _json.dump(peaks_data, pf, separators=(",", ":"))
-        log.info(f"Waveform peaks saved for {job_id}")
-        # ──────────────────────────────────────────────────────────────────
-                    
-        jobs[job_id]["status"] = "completed"
-        jobs[job_id]["progress"] = 100
-        jobs[job_id]["output_dir"] = out_dir
-        jobs[job_id]["zip_path"] = zip_path
-        jobs[job_id]["peaks_path"] = peaks_path
-        log.info(f"Demucs processing complete for {job_id}")
-        
-    except Exception as e:
-        log.error(f"Demucs processing error for {job_id}: {e}", exc_info=True)
-        jobs[job_id]["status"] = "error"
-        jobs[job_id]["error"] = str(e)
-    finally:
-        if input_path.exists():
-            input_path.unlink()
+            with jobs_lock:
+                jobs[job_id]["status"] = "processing"
+                jobs[job_id]["progress"] = 10
+
+            out_dir = STEMS_FOLDER / f"out_{job_id}"
+            out_dir.mkdir(parents=True, exist_ok=True)
+
+            # FIX: Assert input_path resolves within UPLOAD_FOLDER before passing to subprocess
+            try:
+                input_path.resolve().relative_to(UPLOAD_FOLDER.resolve())
+            except ValueError:
+                raise ValueError(f"Unsafe input path rejected: {input_path}")
+
+            cmd = [
+                sys.executable, "-m", "demucs",
+                "--out", str(out_dir),
+                "-n", "htdemucs_6s",
+                "--float32",
+                "--mp3",
+                "--shifts", "1",
+                "--overlap", "0.25",
+                str(input_path)
+            ]
+
+            with jobs_lock:
+                jobs[job_id]["progress"] = 10
+
+            log.info(f"Running Demucs for {job_id}...")
+
+            # Run process and capture stdout/stderr in real-time
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, universal_newlines=True)
+
+            # track what we've already logged to avoid duplicates
+            milestones = set()
+
+            for line in iter(process.stdout.readline, ''):
+                if not line:
+                    break
+                clean_line = line.strip()
+                if clean_line:
+                    # Try to parse real progress from Demucs tqdm output
+                    if '%' in clean_line and '|' in clean_line:
+                        try:
+                            # Extract " 45%" from " 45%|████"
+                            pct_str = clean_line.split('%')[0].split()[-1]
+                            pct = int(pct_str)
+                            # Demucs processes shifts. We just loosely bind it to 10-95%
+                            with jobs_lock:
+                                jobs[job_id]["progress"] = min(95, max(10, pct))
+
+                            # Add cool artificial logs based on percentage!
+                            if pct >= 10 and 10 not in milestones:
+                                with jobs_lock:
+                                    jobs[job_id]["logs"].append("Loading htdemucs_6s model weights...")
+                                milestones.add(10)
+                            if pct >= 20 and 20 not in milestones:
+                                with jobs_lock:
+                                    jobs[job_id]["logs"].append("Model loaded. Analyzing spectral frequencies...")
+                                milestones.add(20)
+                            if pct >= 35 and 35 not in milestones:
+                                with jobs_lock:
+                                    jobs[job_id]["logs"].append("Applying Hybrid Transformer layers...")
+                                milestones.add(35)
+                            if pct >= 50 and 50 not in milestones:
+                                with jobs_lock:
+                                    jobs[job_id]["logs"].append("Separating harmonic and percussive components...")
+                                milestones.add(50)
+                            if pct >= 65 and 65 not in milestones:
+                                with jobs_lock:
+                                    jobs[job_id]["logs"].append("Isolating vocals and drums...")
+                                milestones.add(65)
+                            if pct >= 80 and 80 not in milestones:
+                                with jobs_lock:
+                                    jobs[job_id]["logs"].append("Extracting bass, guitar, and piano stems...")
+                                milestones.add(80)
+                            if pct >= 90 and 90 not in milestones:
+                                with jobs_lock:
+                                    jobs[job_id]["logs"].append("Finalizing audio rendering and saving outputs...")
+                                milestones.add(90)
+                        except Exception:
+                            pass
+                    else:
+                        # Keep only non-tqdm logs (actual demucs text/warnings)
+                        with jobs_lock:
+                            jobs[job_id]["logs"].append(clean_line)
+
+                    with jobs_lock:
+                        if len(jobs[job_id]["logs"]) > 100:
+                            jobs[job_id]["logs"].pop(0)
+
+            process.wait()
+
+            if process.returncode != 0:
+                log.error(f"Demucs failed with return code {process.returncode}")
+                with jobs_lock:
+                    last_logs = jobs[job_id]['logs'][-5:]
+                raise Exception(f"Demucs failed with return code {process.returncode}. Last logs: {last_logs}")
+
+            with jobs_lock:
+                jobs[job_id]["progress"] = 99
+
+            model_out_dir = out_dir / "htdemucs_6s" / input_path.stem
+            if not model_out_dir.exists():
+                raise Exception("Output directory not found after separation.")
+
+            expected_stems = ["vocals.mp3", "drums.mp3", "bass.mp3", "guitar.mp3", "piano.mp3", "other.mp3"]
+            for stem in expected_stems:
+                stem_path = model_out_dir / stem
+                if stem_path.exists():
+                    shutil.move(str(stem_path), str(out_dir / stem))
+
+            shutil.rmtree(out_dir / "htdemucs_6s")
+
+            zip_path = STEMS_FOLDER / f"{job_id}_stems.zip"
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for stem in expected_stems:
+                    stem_file = out_dir / stem
+                    if stem_file.exists():
+                        zipf.write(stem_file, arcname=stem)
+
+            # ── Waveform Peaks Generation ──────────────────────────────────────
+            PEAKS_RESOLUTION = 800
+            peaks_data = {}
+            stem_names = [s.replace(".mp3", "") for s in expected_stems]
+            stem_files_abs = [str(out_dir / f"{name}.mp3") for name in stem_names if (out_dir / f"{name}.mp3").exists()]
+
+            try:
+                import requests
+                resp = requests.post(
+                    f"{SIDECAR_URL}/peaks",
+                    json={"files": stem_files_abs, "resolution": PEAKS_RESOLUTION},
+                    timeout=30
+                )
+                resp.raise_for_status()
+                peaks_data = resp.json()
+                log.info(f"Peaks computed via C++ sidecar for {job_id}")
+            except Exception as sidecar_err:
+                log.warning(f"Sidecar unavailable or failed ({sidecar_err}). Falling back to librosa.")
+                for stem_name in stem_names:
+                    stem_file = out_dir / f"{stem_name}.mp3"
+                    if stem_file.exists():
+                        try:
+                            y, _ = librosa.load(str(stem_file), sr=None, mono=True)
+                            chunk_size = max(1, len(y) // PEAKS_RESOLUTION)
+                            peaks = []
+                            for i in range(0, len(y), chunk_size):
+                                chunk = y[i:i + chunk_size]
+                                peaks.append(float(np.max(np.abs(chunk))))
+                            max_val = max(peaks) if peaks else 1.0
+                            if max_val > 0:
+                                peaks = [round(p / max_val, 4) for p in peaks]
+                            peaks_data[stem_name] = peaks[:PEAKS_RESOLUTION]
+                        except Exception as peaks_err:
+                            log.warning(f"Peaks generation failed for {stem_name}: {peaks_err}")
+                            peaks_data[stem_name] = []
+
+            import json as _json
+            peaks_path = out_dir / "peaks.json"
+            with open(str(peaks_path), "w") as pf:
+                _json.dump(peaks_data, pf, separators=(",", ":"))
+            log.info(f"Waveform peaks saved for {job_id}")
+            # ──────────────────────────────────────────────────────────────────
+
+            with jobs_lock:
+                jobs[job_id]["status"] = "completed"
+                jobs[job_id]["progress"] = 100
+                jobs[job_id]["output_dir"] = out_dir
+                jobs[job_id]["zip_path"] = zip_path
+                jobs[job_id]["peaks_path"] = peaks_path
+            log.info(f"Demucs processing complete for {job_id}")
+
+        except Exception as e:
+            log.error(f"Demucs processing error for {job_id}: {e}", exc_info=True)
+            with jobs_lock:
+                jobs[job_id]["status"] = "error"
+                jobs[job_id]["error"] = str(e)
+        finally:
+            _job_semaphore.release()
+            if input_path.exists():
+                input_path.unlink()
+
+    except Exception as outer_err:
+        log.error(f"Unexpected error in process_audio for {job_id}: {outer_err}", exc_info=True)
+
 
 @app.route('/api/separate', methods=['POST', 'OPTIONS'])
 def separate_audio():
     if request.method == 'OPTIONS':
         return '', 204
-        
+
     if 'file' not in request.files:
         return jsonify({'error': 'No file part'}), 400
-        
+
     file = request.files['file']
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
-        
+
     # Allow empty extension for files that are downloaded with truncated filenames
     allowed_extensions = {".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a", ".mp4", ".mkv", ".mov", ".webm", ".avi", ".wma", ".aiff", ".alac", ""}
     ext = pathlib.Path(file.filename).suffix.lower()
     if ext not in allowed_extensions:
         return jsonify({'error': f'Invalid file format: {ext}'}), 400
-        
+
     job_id = str(uuid.uuid4())
     filename = secure_filename(file.filename)
     input_path = UPLOAD_FOLDER / f"{job_id}{ext}"
     file.save(str(input_path))
-    
-    jobs[job_id] = {
-        "status": "queued",
-        "progress": 0,
-        "logs": []
-    }
-    
+
+    with jobs_lock:
+        jobs[job_id] = {
+            "status": "queued",
+            "progress": 0,
+            "logs": []
+        }
+
     threading.Thread(target=process_audio, args=(job_id, input_path), daemon=True).start()
-    
+
     return jsonify({"job_id": job_id, "status": "queued"})
 
 @app.route('/api/job_status/<job_id>')
 def get_job_status(job_id):
-    if job_id not in jobs:
-        return jsonify({'error': 'Job not found'}), 404
-    return jsonify({
-        "status": jobs[job_id]["status"],
-        "progress": jobs[job_id]["progress"],
-        "error": jobs[job_id].get("error", ""),
-        "logs": jobs[job_id].get("logs", [])
-    })
+    # FIX: Validate job_id format before looking it up
+    if not is_valid_job_id(job_id):
+        return jsonify({'error': 'Invalid job ID'}), 400
+
+    with jobs_lock:
+        if job_id not in jobs:
+            return jsonify({'error': 'Job not found'}), 404
+        job_snapshot = {
+            "status": jobs[job_id]["status"],
+            "progress": jobs[job_id]["progress"],
+            "error": jobs[job_id].get("error", ""),
+            "logs": list(jobs[job_id].get("logs", []))
+        }
+    return jsonify(job_snapshot)
 
 @app.route('/api/stems/<job_id>/<stem_name>')
 def get_stem(job_id, stem_name):
-    if job_id not in jobs or jobs[job_id]["status"] != "completed":
+    # FIX: Validate job_id is a proper UUID
+    if not is_valid_job_id(job_id):
+        return jsonify({'error': 'Invalid job ID'}), 400
+
+    # FIX: Validate stem_name against an explicit allowlist to prevent path traversal
+    if stem_name not in ALLOWED_STEMS:
+        return jsonify({'error': 'Invalid stem name'}), 400
+
+    with jobs_lock:
+        job = jobs.get(job_id)
+
+    if not job or job["status"] != "completed":
         return jsonify({'error': 'Stem not ready or job not found'}), 404
-        
-    stem_path = jobs[job_id]["output_dir"] / stem_name
+
+    stem_path = job["output_dir"] / stem_name
+
+    # FIX: Resolve and verify the path stays within STEMS_FOLDER
+    try:
+        stem_path.resolve().relative_to(STEMS_FOLDER.resolve())
+    except ValueError:
+        log.warning(f"Path traversal attempt on stem endpoint: job={job_id}, stem={stem_name}")
+        return jsonify({'error': 'Invalid stem name'}), 400
+
     if not stem_path.exists():
         return jsonify({'error': 'Stem file not found'}), 404
-        
+
     response = send_file(stem_path, mimetype='audio/mpeg')
-    # Allow browser to cache stem files for 1 hour — avoids re-downloads on
-    # seek / reconnect while the user is on the player page.
     response.headers['Cache-Control'] = 'public, max-age=3600'
     response.headers['Access-Control-Allow-Origin'] = '*'
     return response
@@ -586,37 +745,42 @@ def get_stem(job_id, stem_name):
 
 @app.route('/api/stems_peaks/<job_id>')
 def get_stems_peaks(job_id):
-    """Serve pre-computed waveform peaks JSON for all 6 stems.
-    
-    This lets WaveSurfer render waveforms instantly without decoding audio
-    on the client. The JSON is tiny (~30 KB) compared to 6 MP3 decodes.
-    """
-    if job_id not in jobs or jobs[job_id]["status"] != "completed":
+    """Serve pre-computed waveform peaks JSON for all 6 stems."""
+    # FIX: Validate job_id format
+    if not is_valid_job_id(job_id):
+        return jsonify({'error': 'Invalid job ID'}), 400
+
+    with jobs_lock:
+        job = jobs.get(job_id)
+
+    if not job or job["status"] != "completed":
         return jsonify({'error': 'Job not ready or not found'}), 404
-    
-    peaks_path = jobs[job_id].get("peaks_path")
+
+    peaks_path = job.get("peaks_path")
     if not peaks_path or not pathlib.Path(str(peaks_path)).exists():
         return jsonify({'error': 'Peaks not available'}), 404
-    
+
     response = send_file(str(peaks_path), mimetype='application/json')
-    # Cache peaks for 1 hour — they are immutable for a given job.
     response.headers['Cache-Control'] = 'public, max-age=3600'
     response.headers['Access-Control-Allow-Origin'] = '*'
     return response
 
 @app.route('/api/download/<job_id>')
 def download_stems(job_id):
-    if job_id not in jobs or jobs[job_id]["status"] != "completed":
+    # FIX: Validate job_id format
+    if not is_valid_job_id(job_id):
+        return jsonify({'error': 'Invalid job ID'}), 400
+
+    with jobs_lock:
+        job = jobs.get(job_id)
+
+    if not job or job["status"] != "completed":
         return jsonify({'error': 'Job not ready or not found'}), 404
-        
-    zip_path = jobs[job_id]["zip_path"]
+
+    zip_path = job["zip_path"]
     if not zip_path.exists():
         return jsonify({'error': 'ZIP file not found'}), 404
-        
-    # Removed the immediate 10-second cleanup thread here so the player doesn't crash!
-    # The global cache cleanup thread (cleanup_cache_thread) will safely remove these 
-    # when the cache exceeds 500MB.
-    
+
     response = send_file(zip_path, mimetype='application/zip', as_attachment=True, download_name="separated_stems.zip")
     response.headers['Access-Control-Allow-Origin'] = '*'
     return response
@@ -625,30 +789,36 @@ def download_stems(job_id):
 def cleanup_job(job_id):
     if request.method == 'OPTIONS':
         return '', 204
-        
-    if job_id not in jobs:
-        return jsonify({'error': 'Job not found'}), 404
-        
+
+    # FIX: Validate job_id format
+    if not is_valid_job_id(job_id):
+        return jsonify({'error': 'Invalid job ID'}), 400
+
+    with jobs_lock:
+        if job_id not in jobs:
+            return jsonify({'error': 'Job not found'}), 404
+
     try:
         # Delete the stems folder and zip file
         out_dir = STEMS_FOLDER / f"out_{job_id}"
         zip_path = STEMS_FOLDER / f"{job_id}_stems.zip"
-        
+
         if out_dir.exists():
             shutil.rmtree(out_dir)
-            
+
         if zip_path.exists():
             zip_path.unlink()
-            
+
         # Clean up any lingering uploaded files just in case it crashed midway
         for ext in [".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a", ".mp4", ".mkv", ".mov", ".webm", ".avi", ".wma", ".aiff", ".alac", ""]:
             input_path = UPLOAD_FOLDER / f"{job_id}{ext}"
             if input_path.exists():
                 input_path.unlink()
-                
+
         # Remove from tracking memory
-        del jobs[job_id]
-        
+        with jobs_lock:
+            del jobs[job_id]
+
         log.info(f"Cleaned up job {job_id} successfully.")
         return jsonify({"status": "cleaned"})
     except Exception as e:

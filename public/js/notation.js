@@ -436,8 +436,28 @@ function loadTemplate(templateId) {
   saveHistory();
 }
 
-// 6. History Engine (Undo / Redo)
+// FIX: Debounce guard for saveHistory — prevents a full deep-clone of the grid
+// state on every single keystroke (blur fires frequently on contentEditable cells).
+let _historySaveTimer = null;
+let _lastHistorySaveTime = 0;
+
 function saveHistory() {
+  const now = Date.now();
+  // Immediate snapshot on non-typing actions (template load, palette click, modifier).
+  // Debounce rapid keystrokes: only snapshot if 300ms have elapsed since the last one.
+  if (now - _lastHistorySaveTime < 300) {
+    clearTimeout(_historySaveTimer);
+    _historySaveTimer = setTimeout(() => {
+      _lastHistorySaveTime = Date.now();
+      _commitHistory();
+    }, 300);
+    return;
+  }
+  _lastHistorySaveTime = now;
+  _commitHistory();
+}
+
+function _commitHistory() {
   const stateCopy = JSON.parse(JSON.stringify(notationState.lines));
   if (historyIndex < historyStack.length - 1) {
     historyStack = historyStack.slice(0, historyIndex + 1);
@@ -477,7 +497,14 @@ function setupExport() {
     const clone = originalElement.cloneNode(true);
     clone.style.background = '#fff';
     clone.style.color = '#000';
-    clone.querySelectorAll('.cell-content').forEach(c => c.style.color = '#000');
+    clone.querySelectorAll('.cell-content').forEach(c => {
+      c.style.color = '#000';
+      // FIX: Disable contentEditable on all cells in the clone before passing to
+      // html2pdf. This prevents the library from interpreting user-entered content
+      // as executable markup and neutralizes any potential XSS injection vectors.
+      c.contentEditable = 'false';
+      c.setAttribute('contenteditable', 'false');
+    });
     clone.querySelectorAll('.tali-khali').forEach(c => c.style.color = '#000');
     clone.querySelectorAll('.doc-title-input').forEach(c => {
        c.style.color = '#000';

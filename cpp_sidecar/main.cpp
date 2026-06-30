@@ -1,7 +1,7 @@
 /**
  * Lehra Studio — C++ Peaks Sidecar
  * ===================================
- * Computes waveform peaks for all stems in PARALLEL using true OS threads.
+ * Computes waveform peaks for all stems in PARALLEL using a bounded thread pool.
  * Called by Flask via POST /peaks — returns JSON peaks in ~300ms vs ~15s Python.
  *
  * Dependencies (single-header, downloaded at build time):
@@ -10,7 +10,7 @@
  *   - dr_mp3       : MP3 decoder (dr_libs, MIT license)
  *
  * Build (Linux / Docker):
- *   g++ -O3 -std=c++17 -pthread main.cpp -o peaks_server
+ *   g++ -O3 -std=c++17 -pthread main.cpp -lsoundtouch -o peaks_server
  *
  * Protocol:
  *   POST /peaks
@@ -19,6 +19,11 @@
  *
  *   GET /health
  *     Result: {"status":"ok","service":"lehra-peaks-sidecar"}
+ *
+ * Security:
+ *   - Binds to 127.0.0.1 only (not 0.0.0.0) — internal service only.
+ *   - File paths validated against ALLOWED_PATH_PREFIXES before opening.
+ *   - Port read from SIDECAR_PORT env var, defaulting to 3001.
  */
 
 #define DR_MP3_IMPLEMENTATION
@@ -35,25 +40,136 @@
 #include "json.hpp"
 
 #include <algorithm>
+#include <atomic>
+#include <condition_variable>
+#include <csignal>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <deque>
+#include <functional>
 #include <future>
+#include <mutex>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 using json = nlohmann::json;
 using namespace soundtouch;
 
 #include <cstdint>
+#include <cstdlib>  // getenv
+
+// ── Global server pointer for graceful shutdown ───────────────────────────────
+static httplib::Server* g_svr = nullptr;
+
+// ── Signal handler ────────────────────────────────────────────────────────────
+static void handle_signal(int sig) {
+    fprintf(stdout, "\n[sidecar] Received signal %d, shutting down gracefully...\n", sig);
+    fflush(stdout);
+    if (g_svr) {
+        g_svr->stop();
+    }
+}
+
+// ── Allowed base directories for file access ──────────────────────────────────
+// SECURITY: Only files under these prefixes may be opened by the sidecar.
+// This prevents a malicious caller from reading arbitrary host files.
+static const std::vector<std::string> ALLOWED_PATH_PREFIXES = {
+    "/tmp/",
+    "/app/audio_cache/",
+    "/app/uploads/",
+    "/var/folders/"   // macOS tmp dirs during local dev
+};
+
+static bool is_path_allowed(const std::string& path) {
+    // Reject any path containing ".." traversal components
+    if (path.find("..") != std::string::npos) {
+        return false;
+    }
+    for (const auto& prefix : ALLOWED_PATH_PREFIXES) {
+        if (path.substr(0, prefix.size()) == prefix) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// ── Bounded Thread Pool ───────────────────────────────────────────────────────
+/**
+ * A simple fixed-size thread pool to replace unbounded std::async(launch::async).
+ * Caps the number of simultaneously running audio decode threads to hardware_concurrency,
+ * preventing thread exhaustion and memory spikes on large /peaks requests.
+ */
+class ThreadPool {
+public:
+    explicit ThreadPool(size_t n_threads) : stopping_(false) {
+        for (size_t i = 0; i < n_threads; ++i) {
+            workers_.emplace_back([this] {
+                while (true) {
+                    std::function<void()> task;
+                    {
+                        std::unique_lock<std::mutex> lock(mutex_);
+                        cv_.wait(lock, [this] { return stopping_ || !tasks_.empty(); });
+                        if (stopping_ && tasks_.empty()) return;
+                        task = std::move(tasks_.front());
+                        tasks_.pop_front();
+                    }
+                    task();
+                }
+            });
+        }
+    }
+
+    ~ThreadPool() {
+        {
+            std::unique_lock<std::mutex> lock(mutex_);
+            stopping_ = true;
+        }
+        cv_.notify_all();
+        for (auto& w : workers_) w.join();
+    }
+
+    template<typename F, typename... Args>
+    auto enqueue(F&& f, Args&&... args) -> std::future<std::invoke_result_t<F, Args...>> {
+        using ReturnType = std::invoke_result_t<F, Args...>;
+        auto task = std::make_shared<std::packaged_task<ReturnType()>>(
+            std::bind(std::forward<F>(f), std::forward<Args>(args)...)
+        );
+        std::future<ReturnType> result = task->get_future();
+        {
+            std::unique_lock<std::mutex> lock(mutex_);
+            if (stopping_) throw std::runtime_error("ThreadPool is stopped");
+            tasks_.emplace_back([task]() { (*task)(); });
+        }
+        cv_.notify_one();
+        return result;
+    }
+
+private:
+    std::vector<std::thread> workers_;
+    std::deque<std::function<void()>> tasks_;
+    std::mutex mutex_;
+    std::condition_variable cv_;
+    bool stopping_;
+};
+
+// Global thread pool — sized to hardware concurrency (min 2, max 8)
+static std::unique_ptr<ThreadPool> g_pool;
 
 // ── Pitch & Time Stretching (SoundTouch) ────────────────────────────────────
 static bool process_audio_file(const std::string& in_path, const std::string& out_path, float pitch_semitones, float tempo) {
+    // SECURITY: Validate paths before opening
+    if (!is_path_allowed(in_path) || !is_path_allowed(out_path)) {
+        fprintf(stderr, "[sidecar] Blocked disallowed path: in=%s out=%s\n", in_path.c_str(), out_path.c_str());
+        return false;
+    }
+
     unsigned int channels;
     unsigned int sampleRate;
     drwav_uint64 totalPCMFrameCount;
-    
+
     // Read WAV
     float* pSampleData = drwav_open_file_and_read_pcm_frames_f32(in_path.c_str(), &channels, &sampleRate, &totalPCMFrameCount, nullptr);
     if (pSampleData == nullptr) {
@@ -64,10 +180,10 @@ static bool process_audio_file(const std::string& in_path, const std::string& ou
     SoundTouch st;
     st.setSampleRate(sampleRate);
     st.setChannels(channels);
-    
+
     // Tempo (1.0 = normal, <1.0 slower, >1.0 faster)
     st.setTempo(tempo);
-    
+
     // Pitch shift in semitones
     st.setPitchSemiTones(pitch_semitones);
 
@@ -77,7 +193,7 @@ static bool process_audio_file(const std::string& in_path, const std::string& ou
     // Read back processed samples
     std::vector<float> outBuffer;
     outBuffer.reserve(static_cast<size_t>(totalPCMFrameCount * 2 * channels)); // rough estimate
-    
+
     float temp[4096 * 2]; // up to stereo
     unsigned int numSamples = 0;
     do {
@@ -92,7 +208,7 @@ static bool process_audio_file(const std::string& in_path, const std::string& ou
         outBuffer.insert(outBuffer.end(), temp, temp + (numSamples * channels));
     } while (numSamples != 0);
 
-    // Write 16-bit PCM WAV (which is what Flask currently expects for cache)
+    // Write 16-bit PCM WAV
     drwav_data_format format;
     format.container = drwav_container_riff;
     format.format = DR_WAVE_FORMAT_PCM;
@@ -105,7 +221,7 @@ static bool process_audio_file(const std::string& in_path, const std::string& ou
         fprintf(stderr, "[sidecar] Failed to open output WAV: %s\n", out_path.c_str());
         return false;
     }
-    
+
     // Convert float to 16-bit PCM for writing
     std::vector<int16_t> pcm16(outBuffer.size());
     for (size_t i = 0; i < outBuffer.size(); ++i) {
@@ -127,9 +243,14 @@ static bool process_audio_file(const std::string& in_path, const std::string& ou
  * Returns a normalized [0..1] vector, or empty on decode failure.
  */
 static std::vector<float> compute_stem_peaks(const std::string& filepath, int resolution) {
+    // SECURITY: Validate path before opening
+    if (!is_path_allowed(filepath)) {
+        fprintf(stderr, "[sidecar] Blocked disallowed path in /peaks: %s\n", filepath.c_str());
+        return {};
+    }
+
     drmp3 mp3;
     drmp3_config cfg{};
-    // Force 2-channel (stereo) so we always know the layout
     if (!drmp3_init_file(&mp3, filepath.c_str(), nullptr)) {
         fprintf(stderr, "[sidecar] Failed to open MP3: %s\n", filepath.c_str());
         return {};
@@ -153,14 +274,13 @@ static std::vector<float> compute_stem_peaks(const std::string& filepath, int re
         for (drmp3_uint64 i = 0; i < total_frames; ++i) {
             mono[i] = (pcm[i * 2] + pcm[i * 2 + 1]) * 0.5f;
         }
-        pcm.clear(); // free stereo buffer immediately
+        pcm.clear();
         pcm.shrink_to_fit();
     } else {
         mono = std::move(pcm);
     }
 
     // ── Compute peaks ────────────────────────────────────────────────────────
-    // Divide samples into 'resolution' equal chunks; take max(|x|) per chunk.
     const size_t n     = mono.size();
     const size_t chunk = std::max((size_t)1, n / (size_t)resolution);
     std::vector<float> peaks;
@@ -201,34 +321,60 @@ static std::string stem_name_from_path(const std::string& path) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 int main() {
+    // ── Read port from environment, default 3001 ──────────────────────────────
+    int port = 3001;
+    const char* port_env = std::getenv("SIDECAR_PORT");
+    if (port_env) {
+        try { port = std::stoi(port_env); } catch (...) {}
+    }
+
+    // ── Initialize bounded thread pool ────────────────────────────────────────
+    const size_t n_threads = std::max(2u, std::min(8u, std::thread::hardware_concurrency()));
+    g_pool = std::make_unique<ThreadPool>(n_threads);
+
     httplib::Server svr;
+    g_svr = &svr;
+
+    // ── Register SIGTERM / SIGINT handlers for graceful shutdown ──────────────
+    std::signal(SIGTERM, handle_signal);
+    std::signal(SIGINT,  handle_signal);
 
     // ── POST /peaks ──────────────────────────────────────────────────────────
     svr.Post("/peaks", [](const httplib::Request& req, httplib::Response& res) {
         try {
             const auto body       = json::parse(req.body);
-            // capture by value so each lambda owns its string
             const auto files      = body.at("files").get<std::vector<std::string>>();
             const int  resolution = body.value("resolution", 800);
 
-            // Launch one async task per stem — each runs on its own OS thread.
-            // 6 stems → 6 threads → all decoded simultaneously (no GIL, no waiting).
+            // SECURITY: Validate all paths before processing
+            for (const auto& fp : files) {
+                if (!is_path_allowed(fp)) {
+                    res.status = 403;
+                    res.set_content(
+                        json{{"error", "Path not allowed: " + fp}}.dump(),
+                        "application/json"
+                    );
+                    return;
+                }
+            }
+
             using Pair   = std::pair<std::string, std::vector<float>>;
             using Future = std::future<Pair>;
 
+            // FIX: Use bounded thread pool instead of unbounded std::async
             std::vector<Future> futures;
             futures.reserve(files.size());
 
             for (const std::string& filepath : files) {
                 futures.push_back(
-                    std::async(std::launch::async, [filepath, resolution]() -> Pair {
+                    g_pool->enqueue([filepath, resolution]() -> Pair {
                         return { stem_name_from_path(filepath),
                                  compute_stem_peaks(filepath, resolution) };
                     })
                 );
             }
 
-            // Wait for all threads to finish and collect results
+            // Wait for all tasks to finish and collect results
             json result = json::object();
             for (auto& f : futures) {
                 auto [name, peaks] = f.get();
@@ -257,6 +403,16 @@ int main() {
             float pitch_semitones = body.value("pitch_semitones", 0.0f);
             float stretch = body.value("stretch", 1.0f);
 
+            // SECURITY: Validate both input and output paths
+            if (!is_path_allowed(input) || !is_path_allowed(output)) {
+                res.status = 403;
+                res.set_content(
+                    json{{"error", "Path not allowed"}}.dump(),
+                    "application/json"
+                );
+                return;
+            }
+
             bool success = process_audio_file(input, output, pitch_semitones, stretch);
             if (success) {
                 res.set_content(R"({"status":"ok"})", "application/json");
@@ -280,10 +436,16 @@ int main() {
         );
     });
 
-    fprintf(stdout, "[sidecar] Lehra C++ Peaks Sidecar listening on 0.0.0.0:3001\n");
-    fprintf(stdout, "[sidecar] Parallel mode: std::async per stem (one OS thread per stem)\n");
+    fprintf(stdout, "[sidecar] Lehra C++ Peaks Sidecar listening on 127.0.0.1:%d\n", port);
+    fprintf(stdout, "[sidecar] Thread pool: %zu worker threads\n",
+            std::max(2u, std::min(8u, std::thread::hardware_concurrency())));
+    fprintf(stdout, "[sidecar] Graceful shutdown: SIGTERM/SIGINT registered\n");
     fflush(stdout);
 
-    svr.listen("0.0.0.0", 3001);
+    // FIX: Bind to 127.0.0.1 only — internal service, not publicly accessible
+    svr.listen("127.0.0.1", port);
+
+    g_svr = nullptr;
+    fprintf(stdout, "[sidecar] Server stopped cleanly.\n");
     return 0;
 }
