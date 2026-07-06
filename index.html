@@ -12,7 +12,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@300;400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="public/css/style.css?v=24" />
+  <link rel="stylesheet" href="public/css/style.css?v=25" />
   <link rel="manifest" href="manifest.json" />
   <!-- For PDF Export -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
@@ -610,6 +610,31 @@
   <script src="public/js/catalogue.js?v=22"></script>
   <script src="public/js/notation.js?v=22"></script>
   <script src="public/js/app.js?v=22"></script>
+  <!-- View entrance animation hook (non-breaking, additive) -->
+  <script>
+    (function() {
+      // Add .entering class whenever a view becomes visible, for blur-fade-up entrance
+      var observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(m) {
+          if (m.type === 'attributes' && m.attributeName === 'style') {
+            var el = m.target;
+            if (el.classList && el.classList.contains('app-view')) {
+              var hidden = el.style.display === 'none' || el.hidden;
+              if (!hidden) {
+                el.classList.remove('entering');
+                // Force reflow then add class
+                void el.offsetWidth;
+                el.classList.add('entering');
+              }
+            }
+          }
+        });
+      });
+      document.querySelectorAll('.app-view').forEach(function(v) {
+        observer.observe(v, { attributes: true });
+      });
+    })();
+  </script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

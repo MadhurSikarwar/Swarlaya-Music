@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node -e \"const fs=require('fs'); fs.cpSync('out', '../public/separator', {recursive:true, force:true});\"",
     "start": "next start",
     "lint": "eslint"
   },
