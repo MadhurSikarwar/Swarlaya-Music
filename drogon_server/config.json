@@ -1,0 +1,35 @@
+{
+    "app": {
+        "number_of_threads": 4,
+        "max_connections": 100000,
+        "max_connections_per_ip": 0,
+        "load_dynamic_views": false,
+        "dynamic_views_path": [],
+        "log": {
+            "log_path": "",
+            "logfile_base_name": "",
+            "log_size_limit": 100000000,
+            "log_level": "INFO"
+        },
+        "run_as_daemon": false,
+        "handle_sig_term": true,
+        "relaunch_on_error": false,
+        "use_sendfile": true,
+        "use_gzip": false,
+        "use_brotli": false,
+        "static_files_cache_time": 5,
+        "idle_connection_timeout": 60,
+        "server_header_field": "Lehra-Drogon/1.0",
+        "enable_server_header": true,
+        "enable_date_header": true,
+        "keepalive_requests": 0,
+        "pipelining_requests": 0,
+        "gzip_static": true,
+        "br_static": true,
+        "client_max_body_size": 524288000,
+        "client_max_memory_body_size": 65536,
+        "client_max_websocket_message_size": 131072,
+        "reuse_port": false,
+        "enabled_compressed_request": false
+    }
+}
