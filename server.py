@@ -177,21 +177,28 @@ def pitch_shift_file(input_path: pathlib.Path, output_path: pathlib.Path, pitch_
 
         sidecar_success = False
         try:
-            resp = requests.post(
-                f"{SIDECAR_URL}/process_audio",
-                json={
-                    "input": temp_in_path,
-                    "output": temp_out_path,
-                    "pitch_semitones": float(n_semitones),
-                    "tempo": float(1.0 / stretch) if stretch > 0 else 1.0
-                },
-                timeout=15
-            )
-            resp.raise_for_status()
-            sidecar_success = True
-            log.info(f"  -> Processed via C++ Sidecar: {output_path.name}")
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(0.05)
+            if sock.connect_ex(('127.0.0.1', 3001)) == 0:
+                sock.close()
+                resp = requests.post(
+                    f"{SIDECAR_URL}/process_audio",
+                    json={
+                        "input": temp_in_path,
+                        "output": temp_out_path,
+                        "pitch_semitones": float(n_semitones),
+                        "tempo": float(1.0 / stretch) if stretch > 0 else 1.0
+                    },
+                    timeout=1.5
+                )
+                resp.raise_for_status()
+                sidecar_success = True
+                log.info(f"  -> Processed via C++ Sidecar: {output_path.name}")
+            else:
+                sock.close()
         except Exception as sidecar_err:
-            log.warning(f"Sidecar failed ({sidecar_err}). Falling back to pedalboard.")
+            log.warning(f"Sidecar failed ({sidecar_err}). Falling back to pedalboard / librosa.")
 
         if sidecar_success:
             # The sidecar outputs WAV. We need to load it, apply fade, and save to OGG.
@@ -210,14 +217,22 @@ def pitch_shift_file(input_path: pathlib.Path, output_path: pathlib.Path, pitch_
                 for i in range(0, len(y), chunk_size):
                     f.write(y[i:i+chunk_size])
         else:
-            # Fallback to librosa
+            # Fallback to pedalboard C++ SIMD, then librosa
             y, sr = sf.read(temp_in_path, dtype='float32')
             if y.ndim > 1: y = y.mean(axis=1)
 
-            if stretch != 1.0:
-                y = librosa.effects.time_stretch(y, rate=stretch)
-            if n_semitones != 0.0:
-                y = librosa.effects.pitch_shift(y, sr=sr, n_steps=n_semitones)
+            try:
+                import pedalboard
+                y = pedalboard.time_stretch(y, float(sr), stretch_factor=float(stretch), pitch_shift_in_semitones=float(n_semitones))
+                if y.ndim > 1: y = y.squeeze()
+                log.info(f"  -> Processed via ultra-fast Pedalboard C++ SIMD: {output_path.name}")
+            except Exception as pb_err:
+                log.warning(f"Pedalboard C++ SIMD processing failed ({pb_err}). Falling back to librosa.")
+                if stretch != 1.0:
+                    y = librosa.effects.time_stretch(y, rate=stretch)
+                if n_semitones != 0.0:
+                    y = librosa.effects.pitch_shift(y, sr=sr, n_steps=n_semitones)
+                log.info(f"  -> Processed via Librosa: {output_path.name}")
 
             fade_ms = 15
             fade_samples = int((fade_ms / 1000) * sr)
@@ -231,8 +246,6 @@ def pitch_shift_file(input_path: pathlib.Path, output_path: pathlib.Path, pitch_
                 chunk_size = 44100
                 for i in range(0, len(y), chunk_size):
                     f.write(y[i:i+chunk_size])
-
-            log.info(f"  -> Processed via Librosa (OGG): {output_path.name}")
 
     except Exception as e:
         log.error(f"Processing failed: {e}", exc_info=True)

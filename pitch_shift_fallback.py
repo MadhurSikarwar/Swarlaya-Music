@@ -48,21 +48,28 @@ def run_audio_process(input_path: str, output_path: str, pitch_hz: float, start:
 
         sidecar_success = False
         try:
-            resp = requests.post(
-                f"{SIDECAR_URL}/process_audio",
-                json={
-                    "input": temp_in_path,
-                    "output": temp_out_path,
-                    "pitch_semitones": float(n_semitones),
-                    "tempo": float(1.0 / stretch) if stretch > 0 else 1.0
-                },
-                timeout=15
-            )
-            resp.raise_for_status()
-            sidecar_success = True
-            log.info(f"Processed via C++ sidecar: {output_path}")
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(0.05)
+            if sock.connect_ex(('127.0.0.1', 3001)) == 0:
+                sock.close()
+                resp = requests.post(
+                    f"{SIDECAR_URL}/process_audio",
+                    json={
+                        "input": temp_in_path,
+                        "output": temp_out_path,
+                        "pitch_semitones": float(n_semitones),
+                        "tempo": float(1.0 / stretch) if stretch > 0 else 1.0
+                    },
+                    timeout=1.5
+                )
+                resp.raise_for_status()
+                sidecar_success = True
+                log.info(f"Processed via C++ sidecar: {output_path}")
+            else:
+                sock.close()
         except Exception as err:
-            log.warning(f"Sidecar processing failed ({err}). Falling back to librosa.")
+            log.warning(f"Sidecar processing failed ({err}). Falling back to pedalboard / librosa.")
 
         if sidecar_success:
             y, sr = sf.read(temp_out_path, dtype='float32')
@@ -70,10 +77,17 @@ def run_audio_process(input_path: str, output_path: str, pitch_hz: float, start:
         else:
             y, sr = sf.read(temp_in_path, dtype='float32')
             if y.ndim > 1: y = y.mean(axis=1)
-            if stretch != 1.0 and stretch > 0:
-                y = librosa.effects.time_stretch(y, rate=stretch)
-            if n_semitones != 0.0:
-                y = librosa.effects.pitch_shift(y, sr=sr, n_steps=n_semitones)
+            try:
+                import pedalboard
+                y = pedalboard.time_stretch(y, float(sr), stretch_factor=float(stretch), pitch_shift_in_semitones=float(n_semitones))
+                if y.ndim > 1: y = y.squeeze()
+                log.info(f"Processed via ultra-fast Pedalboard C++ SIMD: {output_path}")
+            except Exception as pb_err:
+                log.warning(f"Pedalboard C++ SIMD processing failed ({pb_err}). Falling back to librosa.")
+                if stretch != 1.0 and stretch > 0:
+                    y = librosa.effects.time_stretch(y, rate=stretch)
+                if n_semitones != 0.0:
+                    y = librosa.effects.pitch_shift(y, sr=sr, n_steps=n_semitones)
 
         # Apply 15ms seamless loop sine fade in/out
         fade_ms = 15
