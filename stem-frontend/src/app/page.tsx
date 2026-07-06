@@ -15,7 +15,6 @@ import {
   Zap,
   Layers,
   ShieldCheck,
-  Sparkles,
   Activity
 } from "lucide-react";
 import axios from "axios";
@@ -161,11 +160,6 @@ export default function Home() {
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
           className="text-center mb-24 relative flex flex-col items-center"
         >
-          <div className="ai-glass-pill">
-            <Sparkles className="w-4 h-4" />
-            <span>AI Powered Audio Extraction</span>
-          </div>
-
           <h1 className="hero-title">
             AI Stem Separator
           </h1>
