@@ -11,6 +11,8 @@ public:
         ADD_METHOD_TO(AudioController::getTanpura, "/api/tanpura", drogon::Get, drogon::Options);
         ADD_METHOD_TO(AudioController::getTanpuraString, "/api/tanpura_string", drogon::Get, drogon::Options);
         ADD_METHOD_TO(AudioController::getStatus, "/api/status", drogon::Get, drogon::Options);
+        ADD_METHOD_TO(AudioController::getStatus, "/health", drogon::Get, drogon::Options);
+        ADD_METHOD_TO(AudioController::getStatus, "/api/health", drogon::Get, drogon::Options);
     METHOD_LIST_END
 
     void getAudio(const drogon::HttpRequestPtr& req,

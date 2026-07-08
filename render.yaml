@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: lehra-studio
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 3000

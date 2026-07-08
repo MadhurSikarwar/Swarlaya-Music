@@ -32,7 +32,13 @@
 #define DR_WAV_IMPLEMENTATION
 #include "dr_wav.h"
 
+#if __has_include(<soundtouch/SoundTouch.h>)
+#include <soundtouch/SoundTouch.h>
+#elif __has_include(<SoundTouch.h>)
 #include <SoundTouch.h>
+#else
+#include "SoundTouch.h"
+#endif
 
 // Use thread-pool mode; plain HTTP only (no OpenSSL dep)
 #include "httplib.h"

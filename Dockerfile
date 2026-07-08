@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     cmake \
     make \
+    pkg-config \
     libsoundtouch-dev \
     libdrogon-dev \
     libjsoncpp-dev \
@@ -20,8 +21,8 @@ WORKDIR /build
 # Copy only the C++ sidecar source files needed for compilation
 COPY cpp_sidecar/ ./cpp_sidecar/
 
-# Build the sidecar binary — statically link soundtouch where possible
-RUN g++ -O3 -std=c++17 -pthread cpp_sidecar/main.cpp -lsoundtouch -o peaks_server
+# Build the sidecar binary — explicitly include /usr/include/soundtouch
+RUN g++ -O3 -std=c++17 -pthread -I/usr/include/soundtouch cpp_sidecar/main.cpp -lsoundtouch -o peaks_server
 
 # Copy Drogon C++ server source and build release binary
 COPY drogon_server/ ./drogon_server/
@@ -39,7 +40,7 @@ FROM python:3.11-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libsndfile1 \
-    libsoundtouch1 \
+    libsoundtouch-dev \
     libjsoncpp-dev \
     uuid-dev \
     libssl-dev \

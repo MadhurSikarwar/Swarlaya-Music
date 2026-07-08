@@ -1,0 +1,13 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.git
+.gitignore
+audio_cache/*
+uploads/*
+*.wav
+*.mp3
+*.ogg
+node_modules
+.DS_Store
