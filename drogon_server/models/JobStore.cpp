@@ -1,4 +1,6 @@
 #include "JobStore.hpp"
+#include <mutex>
+#include <shared_mutex>
 #include <random>
 #include <cstdio>
 

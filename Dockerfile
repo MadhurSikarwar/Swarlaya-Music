@@ -59,11 +59,9 @@ RUN g++ -O3 -std=c++17 -pthread \
 
 # ── Build Drogon application server ──────────────────────────────────────────
 COPY drogon_server/ ./drogon_server/
-# Use single-threaded make so the actual compiler error is visible in Render logs
 RUN cd drogon_server && mkdir -p build && cd build \
     && cmake .. -DCMAKE_BUILD_TYPE=Release \
-    && make VERBOSE=1 2>&1 | tail -100 \
-    && make
+    && make -j$(nproc)
 
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
