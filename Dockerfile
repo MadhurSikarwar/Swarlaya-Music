@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zlib1g-dev \
     libbrotli-dev \
     libsqlite3-dev \
+    libc-ares-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
@@ -31,9 +32,11 @@ RUN wget -q https://codeberg.org/soundtouch/soundtouch/archive/2.3.2.tar.gz -O s
     && cd /build \
     && rm -rf soundtouch soundtouch.tar.gz
 
-# ── Build Drogon from source ──────────────────────────────────────────────────
+# ── Build Drogon from source (pinned to stable v1.9.6) ───────────────────────
 # Drogon is not in Debian's official repos, so we must build it ourselves.
-RUN git clone --depth=1 --recurse-submodules https://github.com/drogonframework/drogon.git /build/drogon_src \
+# Pin to v1.9.6 — stable tag that matches the sync HttpClient API used in this project.
+RUN git clone --branch v1.9.6 --depth=1 --recurse-submodules \
+        https://github.com/drogonframework/drogon.git /build/drogon_src \
     && cd /build/drogon_src \
     && mkdir build && cd build \
     && cmake .. \
@@ -56,9 +59,11 @@ RUN g++ -O3 -std=c++17 -pthread \
 
 # ── Build Drogon application server ──────────────────────────────────────────
 COPY drogon_server/ ./drogon_server/
+# Use single-threaded make so the actual compiler error is visible in Render logs
 RUN cd drogon_server && mkdir -p build && cd build \
     && cmake .. -DCMAKE_BUILD_TYPE=Release \
-    && make -j$(nproc)
+    && make VERBOSE=1 2>&1 | tail -100 \
+    && make
 
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
