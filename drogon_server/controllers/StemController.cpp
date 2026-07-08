@@ -76,7 +76,8 @@ void StemController::separate(const drogon::HttpRequestPtr& req,
         models::JobStore::instance().deleteJob(jobId);
         return sendJsonError(500, "Failed to save uploaded file on server", callback);
     }
-    out.write(file.fileData().data(), file.fileData().size());
+    const auto& fileContent = file.fileContent();
+    out.write(fileContent.data(), static_cast<std::streamsize>(fileContent.size()));
     out.close();
 
     services::JobWorkerPool::instance().enqueueJob(jobId, uploadPath);

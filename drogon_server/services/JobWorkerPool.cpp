@@ -2,11 +2,8 @@
 #include "../models/JobStore.hpp"
 #include "../utils/Subprocess.hpp"
 #include "../utils/ZipUtils.hpp"
-#include <drogon/HttpClient.h>
-#include <drogon/HttpRequest.h>
-#include <drogon/HttpResponse.h>
 #include <drogon/drogon.h>
-#include <iostream>
+#include <json/json.h>
 #include <fstream>
 #include <set>
 #include <algorithm>
@@ -160,13 +157,9 @@ void JobWorkerPool::processJob(const std::string& jobId, const std::filesystem::
     // Compute Waveform Peaks via C++ sidecar or fallback
     std::filesystem::path peaksPath = outDir / "peaks.json";
     bool peaksSuccess = false;
+    // Call the C++ peaks sidecar via curl subprocess (avoids Drogon HttpClient sync API issues)
     try {
-        auto client = drogon::HttpClient::newHttpClient("http://127.0.0.1:3001");
-        auto req = drogon::HttpRequest::newHttpRequest();
-        req->setPath("/peaks");
-        req->setMethod(drogon::Post);
-        req->setContentTypeCode(drogon::CT_APPLICATION_JSON);
-
+        // Build JSON body
         Json::Value reqJson;
         Json::Value filesArray(Json::arrayValue);
         for (const auto& stem : expectedStems) {
@@ -177,18 +170,34 @@ void JobWorkerPool::processJob(const std::string& jobId, const std::filesystem::
         }
         reqJson["files"] = filesArray;
         reqJson["resolution"] = 800;
-        req->setBody(reqJson.toStyledString());
+        std::string body = Json::FastWriter().write(reqJson);
 
-        auto resp = client->sendRequest(req, 30.0);
-        if (resp.first == drogon::ReqResult::Ok && resp.second && resp.second->getStatusCode() == 200) {
-            std::ofstream pf(peaksPath);
-            pf << resp.second->getBody();
-            pf.close();
+        // Write body to a temp file
+        std::filesystem::path bodyFile = outDir / "peaks_req.json";
+        {
+            std::ofstream bf(bodyFile);
+            bf << body;
+        }
+
+        // Call sidecar via curl and capture response to peaks.json
+        std::vector<std::string> curlCmd = {
+            "curl", "-sf", "--max-time", "30",
+            "-X", "POST",
+            "-H", "Content-Type: application/json",
+            "-d", "@" + bodyFile.string(),
+            "-o", peaksPath.string(),
+            "http://127.0.0.1:3001/peaks"
+        };
+        int curlExit = utils::Subprocess::run(curlCmd);
+        std::error_code ec2;
+        std::filesystem::remove(bodyFile, ec2);
+
+        if (curlExit == 0 && std::filesystem::exists(peaksPath, ec2) && std::filesystem::file_size(peaksPath, ec2) > 2) {
             peaksSuccess = true;
             LOG_INFO << "[JobWorkerPool] Peaks generated via sidecar for job " << jobId;
         }
     } catch (...) {
-        LOG_WARN << "[JobWorkerPool] Sidecar HTTP call failed for job " << jobId;
+        LOG_WARN << "[JobWorkerPool] Sidecar curl call failed for job " << jobId;
     }
 
     if (!peaksSuccess) {

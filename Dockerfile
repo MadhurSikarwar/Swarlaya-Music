@@ -61,7 +61,7 @@ RUN g++ -O3 -std=c++17 -pthread \
 COPY drogon_server/ ./drogon_server/
 RUN cd drogon_server && mkdir -p build && cd build \
     && cmake .. -DCMAKE_BUILD_TYPE=Release \
-    && make -j$(nproc)
+    && make
 
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
@@ -71,6 +71,7 @@ FROM python:3.11-slim AS runtime
 # Install only runtime shared libraries (standard Debian packages, no versioned names)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    curl \
     libsndfile1 \
     libjsoncpp-dev \
     libssl-dev \
