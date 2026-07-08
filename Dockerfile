@@ -1,6 +1,6 @@
 # ── Stage 1: Builder ──────────────────────────────────────────────────────────
-# Build SoundTouch from source (static), then compile C++ sidecar and Drogon backend.
-# This stage is discarded after build — dev tools NEVER appear in the runtime image.
+# Builds SoundTouch (static) and Drogon (from source), then compiles the C++ sidecar
+# and Drogon backend. This stage is discarded after build.
 FROM python:3.11-slim AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -10,29 +10,39 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     wget \
     pkg-config \
-    libdrogon-dev \
     libjsoncpp-dev \
     uuid-dev \
     libssl-dev \
     zlib1g-dev \
+    libbrotli-dev \
+    libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 
 # ── Build SoundTouch from source (static library) ────────────────────────────
-# This guarantees -lsoundtouch and its headers exist regardless of distro quirks.
 RUN wget -q https://codeberg.org/soundtouch/soundtouch/archive/2.3.2.tar.gz -O soundtouch.tar.gz \
     && tar -xzf soundtouch.tar.gz \
     && cd soundtouch \
-    && mkdir build_st \
-    && cd build_st \
-    && cmake .. \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DBUILD_SHARED_LIBS=OFF \
+    && mkdir build_st && cd build_st \
+    && cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
     && make -j$(nproc) \
     && make install \
     && cd /build \
     && rm -rf soundtouch soundtouch.tar.gz
+
+# ── Build Drogon from source ──────────────────────────────────────────────────
+# Drogon is not in Debian's official repos, so we must build it ourselves.
+RUN git clone --depth=1 --recurse-submodules https://github.com/drogonframework/drogon.git /build/drogon_src \
+    && cd /build/drogon_src \
+    && mkdir build && cd build \
+    && cmake .. \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_EXAMPLES=OFF \
+        -DBUILD_CTL=OFF \
+    && make -j$(nproc) \
+    && make install \
+    && rm -rf /build/drogon_src
 
 # ── Build the C++ sidecar ─────────────────────────────────────────────────────
 COPY cpp_sidecar/ ./cpp_sidecar/
@@ -44,25 +54,26 @@ RUN g++ -O3 -std=c++17 -pthread \
     /usr/local/lib/libSoundTouch.a \
     -o peaks_server
 
-# ── Build Drogon C++ server ───────────────────────────────────────────────────
+# ── Build Drogon application server ──────────────────────────────────────────
 COPY drogon_server/ ./drogon_server/
-RUN cd drogon_server && mkdir -p build && cd build && \
-    cmake .. -DCMAKE_BUILD_TYPE=Release && \
-    make -j$(nproc)
+RUN cd drogon_server && mkdir -p build && cd build \
+    && cmake .. -DCMAKE_BUILD_TYPE=Release \
+    && make -j$(nproc)
 
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
-# Lean production image — no build compilers, smaller attack surface, smaller size.
+# Lean production image — only runtime .so files, no compilers or headers.
 FROM python:3.11-slim AS runtime
 
-# Install runtime dependencies only (no -dev packages needed since sidecar is statically linked)
+# Install only runtime shared libraries (standard Debian packages, no versioned names)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libsndfile1 \
-    libjsoncpp25 \
-    libssl3 \
-    zlib1g \
-    libdrogon-dev \
+    libjsoncpp-dev \
+    libssl-dev \
+    zlib1g-dev \
+    libbrotli-dev \
+    libsqlite3-0 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -76,6 +87,11 @@ RUN pip install --upgrade pip && \
 COPY --from=builder /build/peaks_server /app/peaks_server
 COPY --from=builder /build/drogon_server/build/lehra_server /app/lehra_server
 
+# Copy Drogon shared libraries from builder (since they're not in Debian repos)
+COPY --from=builder /usr/local/lib/libdrogon.so* /usr/local/lib/
+COPY --from=builder /usr/local/lib/libtrantor.so* /usr/local/lib/
+RUN ldconfig
+
 # Copy application source
 COPY . /app/
 COPY drogon_server/config.json /app/config.json
@@ -84,7 +100,6 @@ COPY drogon_server/config.json /app/config.json
 RUN chmod +x /app/startup.sh
 
 # ── Security: Run as non-root user ───────────────────────────────────────────
-# Principle of least privilege — neither Drogon nor the C++ sidecar run as root.
 RUN useradd -m -u 1001 appuser && \
     chown -R appuser:appuser /app
 
@@ -94,7 +109,7 @@ RUN mkdir -p /app/audio_cache /app/uploads/stems /app/assets && \
 
 USER appuser
 
-# Expose port (will be overridden by $PORT on Render/Railway)
+# Expose port (will be overridden by $PORT on Render)
 EXPOSE 3000
 
 # Run the application via startup script
