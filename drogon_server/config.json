@@ -26,9 +26,9 @@
         "pipelining_requests": 0,
         "gzip_static": true,
         "br_static": true,
-        "client_max_body_size": 524288000,
-        "client_max_memory_body_size": 65536,
-        "client_max_websocket_message_size": 131072,
+        "client_max_body_size": "500M",
+        "client_max_memory_body_size": "64K",
+        "client_max_websocket_message_size": "128K",
         "reuse_port": false,
         "enabled_compressed_request": false
     }
