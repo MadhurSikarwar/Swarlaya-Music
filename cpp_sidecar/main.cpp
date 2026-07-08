@@ -222,8 +222,8 @@ static bool process_audio_file(const std::string& in_path, const std::string& ou
     format.sampleRate = sampleRate;
     format.bitsPerSample = 16;
 
-    drwav* pWav = drwav_open_file_write(out_path.c_str(), &format, nullptr);
-    if (pWav == nullptr) {
+    drwav wav;
+    if (!drwav_init_file_write(&wav, out_path.c_str(), &format, nullptr)) {
         fprintf(stderr, "[sidecar] Failed to open output WAV: %s\n", out_path.c_str());
         return false;
     }
@@ -237,8 +237,8 @@ static bool process_audio_file(const std::string& in_path, const std::string& ou
         pcm16[i] = static_cast<int16_t>(sample * 32767.0f);
     }
 
-    drwav_write_pcm_frames(pWav, outBuffer.size() / channels, pcm16.data());
-    drwav_close(pWav);
+    drwav_write_pcm_frames(&wav, outBuffer.size() / channels, pcm16.data());
+    drwav_uninit(&wav);
     return true;
 }
 
