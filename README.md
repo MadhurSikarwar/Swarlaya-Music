@@ -108,13 +108,13 @@ Follow these instructions to run the website after cloning the repository.
    cd ..
    ```
 
-4. **Run the Python backend server:**
+4. **Run the Python backend server (legacy/local-dev only — production uses the Drogon C++ server):**
    ```bash
-   python server.py
+   python legacy/server.py
    ```
    *Alternatively, run with Gunicorn:*
    ```bash
-   gunicorn --bind 0.0.0.0:3000 --workers 1 --threads 2 server:app
+   cd legacy && gunicorn --bind 0.0.0.0:3000 --workers 1 --threads 2 server:app
    ```
 
 5. Open `http://localhost:3000` in your web browser.

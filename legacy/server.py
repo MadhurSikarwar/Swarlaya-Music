@@ -48,7 +48,7 @@ mimetypes.add_type('audio/aac', '.aac')
 
 
 # ── Paths ───────────────────────────────────────────────────────
-BASE_DIR   = pathlib.Path(__file__).parent.resolve()   # .../webapp/
+BASE_DIR   = pathlib.Path(__file__).parent.parent.resolve()   # .../webapp/ (server.py lives in webapp/legacy/)
 ASSETS_DIR = BASE_DIR / 'assets'                       # .../webapp/assets/
 CACHE_DIR  = BASE_DIR / 'audio_cache'                 # .../webapp/audio_cache/
 CACHE_DIR.mkdir(exist_ok=True)
