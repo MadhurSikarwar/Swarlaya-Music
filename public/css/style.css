@@ -2104,3 +2104,261 @@ body.fullscreen-mode .np-waveform {
   .orb-1, .orb-2, .orb-3 { animation: none; }
   .app-view.entering { animation: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   Shared small controls (presets, trainer, timer, tuner, recorder…)
+   ══════════════════════════════════════════════════════════════════ */
+.modal-hint {
+  font-size: 0.78rem;
+  color: var(--text-sub);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+.text-input,
+.num-input {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 7px 10px;
+  outline: none;
+  transition: border-color var(--transition);
+}
+.text-input:focus,
+.num-input:focus { border-color: var(--gold); }
+.num-input { width: 64px; text-align: center; -moz-appearance: textfield; }
+.small-select {
+  padding: 3px 24px 3px 8px;
+  font-size: 0.7rem;
+  border-radius: 4px;
+  background-position: right 6px center;
+  background-size: 8px;
+  animation: none;
+}
+
+/* ── Presets ── */
+.preset-save-row { display: flex; gap: 8px; margin-bottom: 16px; }
+.preset-save-row .text-input { flex: 1; min-width: 0; }
+.preset-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 50vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.preset-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+}
+.preset-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.preset-name { font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preset-summary { font-size: 0.7rem; color: var(--text-sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preset-delete { padding: 4px 9px; font-size: 1rem; line-height: 1; }
+.preset-delete:hover { color: #ff6b6b; border-color: rgba(255,107,107,0.4); background: rgba(255,107,107,0.08); }
+
+/* ── Theka (under the beat dots) ── */
+.theka-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 0;
+  margin-top: 14px;
+}
+.theka-row[hidden] { display: none; }
+.theka-vibhag {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0 8px;
+  border-left: 1px solid var(--border-gold);
+}
+.theka-vibhag:first-child { border-left: none; }
+.theka-marker {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--gold);
+  min-height: 0.8rem;
+  letter-spacing: 0.05em;
+}
+.theka-bols { display: flex; gap: 6px; }
+.theka-bol {
+  font-size: 0.78rem;
+  color: var(--text-sub);
+  padding: 1px 2px;
+  border-radius: 4px;
+  transition: color 0.1s, background 0.1s;
+}
+.theka-bol.active {
+  color: #1a1208;
+  background: var(--gold);
+  box-shadow: 0 0 10px rgba(245,166,35,0.6);
+}
+.fx-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.fx-section .toggle-label { white-space: normal; }
+.fx-section .toggle-text { white-space: normal; }
+
+/* ── Tool boxes (laya trainer, practice timer) ── */
+.tool-box {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.02);
+}
+.tool-box[open] { border-color: rgba(245,166,35,0.2); }
+.tool-box summary {
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold);
+  list-style: none;
+  user-select: none;
+}
+.tool-box summary::-webkit-details-marker { display: none; }
+.tool-box summary::before { content: '▸ '; display: inline-block; transition: transform var(--transition); }
+.tool-box[open] summary::before { transform: rotate(90deg); }
+.tool-sub {
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--text-sub);
+  margin-left: 6px;
+}
+.tool-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin: 12px 0 10px;
+  font-size: 0.75rem;
+  color: var(--text-sub);
+}
+.tool-grid label { display: flex; align-items: center; gap: 6px; }
+.tool-row { display: flex; align-items: center; gap: 12px; }
+.tool-row .btn-tap.active { background: var(--gold); color: #1a1208; }
+.tool-progress {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.06);
+  overflow: hidden;
+}
+.tool-bar {
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold-dark), var(--gold));
+  transition: width 0.4s ease;
+}
+.tool-status {
+  min-height: 1.1em;
+  margin-top: 8px;
+  font-size: 0.72rem;
+  color: var(--text-sub);
+}
+
+/* ── Riyaz goal & streak ── */
+.stats-chart { position: relative; }
+.stat-bar.met { background: linear-gradient(to top, rgba(245,166,35,0.35), var(--gold-light)); }
+.stat-goal-line {
+  position: absolute;
+  left: 0; right: 0;
+  border-top: 1px dashed rgba(255,209,102,0.55);
+  pointer-events: none;
+}
+.goal-box { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.goal-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.goal-label { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--text-sub); }
+.goal-streak { font-size: 0.8rem; color: var(--text-sub); }
+.goal-streak strong { color: var(--gold); }
+
+/* ── Tanpura options (under the tanpura volume) ── */
+.tanpura-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -4px 0 0 70px;
+}
+.tanpura-options select:disabled { opacity: 0.4; cursor: default; }
+@media (max-width: 600px) {
+  .tanpura-options { margin-left: 0; }
+}
+
+/* ── Swar tuner ── */
+.tuner-display { text-align: center; padding: 6px 0 14px; }
+.tuner-octave { font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-sub); min-height: 1em; }
+.tuner-swar {
+  font-family: 'Cinzel', serif;
+  font-size: 3.4rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--gold);
+  text-shadow: 0 0 24px rgba(245,166,35,0.35);
+}
+.tuner-qualifier { font-size: 0.8rem; color: var(--text-sub); min-height: 1.1em; font-style: italic; }
+.tuner-gauge {
+  position: relative;
+  height: 46px;
+  margin: 16px 6px 6px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(255,107,107,0.12), rgba(245,166,35,0.12) 30%, rgba(46,204,113,0.18) 45%, rgba(46,204,113,0.18) 55%, rgba(245,166,35,0.12) 70%, rgba(255,107,107,0.12));
+  border: 1px solid var(--border);
+}
+.tuner-zone { position: absolute; left: 50%; top: 0; bottom: 0; border-left: 1px solid rgba(255,255,255,0.35); }
+.tuner-ticks {
+  position: absolute; left: 0; right: 0; bottom: -18px;
+  display: flex; justify-content: space-between;
+  font-size: 0.6rem; color: var(--text-muted);
+}
+.tuner-needle {
+  position: absolute;
+  top: -4px; bottom: -4px;
+  width: 4px;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: var(--gold);
+  box-shadow: 0 0 10px rgba(245,166,35,0.7);
+}
+.tuner-needle.good { background: #2ecc71; box-shadow: 0 0 12px rgba(46,204,113,0.8); }
+.tuner-needle.near { background: var(--gold); }
+.tuner-needle.far { background: #ff6b6b; box-shadow: 0 0 10px rgba(255,107,107,0.7); }
+.tuner-needle.idle { background: rgba(255,255,255,0.15); box-shadow: none; }
+.tuner-readout { margin-top: 24px; font-size: 0.85rem; color: var(--text-primary); min-height: 1.2em; }
+.tuner-readout #tunerHz { color: var(--text-sub); margin-left: 8px; }
+.tuner-controls { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; font-size: 0.8rem; color: var(--text-sub); }
+.tuner-sa strong { color: var(--gold); }
+.tuner-mic-btn { width: 100%; }
+.btn-tap.active { background: var(--gold); color: #1a1208; }
+
+/* ── Riyaz recorder ── */
+.rec-row { margin-top: 12px; }
+.rec-btn.recording { background: #e74c3c; border-color: #e74c3c; color: #fff; animation: rec-pulse 1.4s ease-in-out infinite; }
+@keyframes rec-pulse { 50% { box-shadow: 0 0 14px rgba(231,76,60,0.7); } }
+.rec-time { font-variant-numeric: tabular-nums; font-size: 0.8rem; color: var(--text-primary); min-width: 36px; }
+.rec-meter .tool-bar { transition: width 0.05s linear; background: linear-gradient(90deg, #2ecc71, var(--gold) 80%, #e74c3c); }
+.take-list { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 8px; }
+.take-item { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; background: var(--bg-card); }
+.take-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.take-name { flex: 1; min-width: 0; font-size: 0.78rem; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.take-head a.header-icon-btn { font-size: 0.7rem; text-decoration: none; }
+.take-item audio { width: 100%; height: 32px; }
+
+/* ── Notation library / share ── */
+.ns-tempo { font-size: 0.7rem; color: var(--text-sub); margin-right: 8px; white-space: nowrap; }
+.ns-file-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 10px; }
+.ns-share-url { width: 100%; font-size: 0.72rem; }
+#nsLibraryBtn.saved { color: #2ecc71; border-color: rgba(46,204,113,0.5); }

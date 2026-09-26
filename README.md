@@ -13,12 +13,12 @@ A premium, interactive web application designed for Indian Classical music pract
 The Lehra Player is a beautifully crafted distraction-free UI complete with real-time pitch shifting, tempo adjustments, and a practice tracker.
 
 ### How the Background Audio Engineering Works
-Achieving high-fidelity audio manipulation in a web browser is incredibly challenging. To avoid robotic "buzzing" artifacts, Lehra Studio Web uses a **Hybrid Client-Server Audio Architecture**:
+Like the Android app's native engine, the Lehra Player renders audio **live in the browser**, so tempo and pitch changes are instant and never restart the cycle:
 
-*   **Segment Slicing:** The Python backend calculates the exact timestamp (`start` and `end`) for the closest recorded tempo segment in the original track.
-*   **Time-Stretching:** If the requested BPM isn't an exact match, `librosa` stretches the audio perfectly in time using PSOLA without changing its pitch.
-*   **Pitch-Shifting:** It then shifts the audio to your target scale (e.g., C#) using a high-quality `kaiser_best` resampling algorithm.
-*   **Zero-Drift Synchronization:** The frontend plays the pristine audio at `playbackRate=1.0`. To ensure the metronome and visualizers stay perfectly in sync over long practice sessions, we use a Web Audio lookahead `nextNoteTime` loop instead of a standard JavaScript `setInterval`.
+*   **Decode once:** Each raag's `.aac` holds one recorded taal cycle per preset tempo. The browser decodes it once, skips the AAC encoder delay (1640 samples), and splits it into seamless per-tempo loops (a short crossfade into the audio that precedes each sam removes the tick at every loop point).
+*   **Real-time engine (AudioWorklet):** `public/js/lehra/engine.worklet.js` resamples for pitch (band-limited sinc) and time-stretches with WSOLA, always reading the recording whose tempo — after the pitch shift — is closest, so the residual stretch stays within about ±15%. Moving between recordings crossfades at the same position in the cycle.
+*   **Tanpura:** The drone (`tanpura_06_01.wav`, tuned with Sa = F) is resampled live to the selected Sa.
+*   **Locked metronome:** Metronome ticks and the matra display are scheduled from the engine's own musical clock, so they stay on the lehra's beats through every tempo change.
 
 ### Advanced Lehra Features
 - **Riyaz Tracker:** Automatically tracks your daily practice sessions and visualizes your progress over a 7-day period using browser `localStorage`.
@@ -36,6 +36,7 @@ The Stem Separator allows users to upload any song and extract the individual in
 *   **Live Neural Network Streaming:** The frontend features a sleek, mobile-responsive hacker-style terminal. The backend intercepts `stdout` from the Demucs Python process and streams descriptive AI milestones directly to the user (e.g., *Loading model weights...*, *Separating harmonic and percussive components...*) in real-time without exposing raw progress bars.
 *   **Interactive Multitrack Player:** Once the AI finishes separating the stems, the user is presented with a beautiful, responsive Multitrack UI. Users can visually adjust volumes, **Solo** specific tracks, or **Mute** unwanted tracks using custom UI controls with dynamic color styling.
 *   **ZIP Export:** Users can download all extracted stems packaged neatly into a `.zip` file for use in DAWs like Ableton or Logic Pro.
+*   **Server limits:** Demucs needs several GB of RAM, so the server runs one separation at a time, accepts uploads up to 100 MB, queues at most 4 jobs (further uploads get a "busy, try again" message), and deletes every upload and its results an hour after it was made.
 
 ---
 
@@ -51,70 +52,53 @@ Both applications are built with a breathtaking, dark-mode premium aesthetic:
 
 - **Frontend & UI:** Initialized `stem-frontend` layout with Next.js, added play/pause notation controls, and deployed static separator assets with service worker updates.
 - **Audio Engine:** Implemented the core Web Audio engine for robust, artifact-free playback.
+- **Real-time Lehra engine:** Tempo, pitch and raag changes now happen live in the browser (AudioWorklet) instead of being re-rendered on the server; loops are seamless and the tanpura plays in tune.
 - **Docker & Deployment:** Added `Dockerfile` using Gunicorn, fixed file serving issues in Docker slim images by adding `mailcap` for MIME types, and set up Cloudflare tunneling.
 
 ---
 
 ## 🚀 Getting Started
 
-Follow these instructions to run the website after cloning the repository.
-
 ### Prerequisites
 - Git
-- Python 3.11+
-- Node.js (if modifying the Next.js frontend)
-- Docker (optional, for containerized running)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) — the site runs as one Docker image, locally and in production
+- Node.js 22+ (only for the tests and for rebuilding the Stem Separator frontend)
 
-### Method 1: Running with Docker (Recommended)
+### Run it locally
+```bash
+git clone <repository-url>
+cd <repository-folder>/webapp
+docker compose up --build
+```
+Open `http://localhost:3000`.
 
-1. **Clone the repository:**
-   ```bash
-   git clone <repository-url>
-   cd <repository-folder>/webapp
-   ```
+The first build compiles the C++ server and takes a while; later builds are cached. The website files (`index.html`, `public/`, `assets/`, …) are mounted into the container, so frontend edits show up on reload. Changes under `drogon_server/` need `docker compose up --build`.
 
-2. **Build the Docker image:**
-   ```bash
-   docker build -t lehrastudio-webapp .
-   ```
+### Tests
+```bash
+npm install     # once: ESLint
+npm run lint    # site modules, service worker, tests
+npm test        # Lehra engine, service worker, catalogue, riyaz
+```
+`bash tests/smoke.sh http://localhost:3000` checks a running server (pages, security, API validation). GitHub Actions (`.github/workflows/ci.yml`) runs all of these on every push and builds the Docker image, so C++ compile errors show up there before Render.
 
-3. **Run the Docker container:**
-   ```bash
-   docker run -p 3000:3000 lehrastudio-webapp
-   ```
-4. Open `http://localhost:3000` in your web browser.
+### Rebuilding the Stem Separator frontend
+Only needed when changing `stem-frontend/`:
+```bash
+cd stem-frontend
+npm install
+npm run build   # also replaces ../public/separator with the new export
+```
+For live development, `npm run dev` serves it on http://localhost:3001 and talks to the server on port 3000.
 
-### Method 2: Running Locally (Python + Node.js)
-
-1. **Clone the repository and navigate to the webapp directory:**
-   ```bash
-   git clone <repository-url>
-   cd <repository-folder>/webapp
-   ```
-
-2. **Install Python dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **(Optional) Build the Next.js frontend:**
-   *If you are modifying the frontend source code in `stem-frontend`.*
-   ```bash
-   cd stem-frontend
-   npm install
-   npm run build
-   # On Windows (PowerShell): Copy-Item -Path "out\*" -Destination "..\public\separator\" -Recurse -Force
-   # On Mac/Linux: cp -r out/* ../public/separator/
-   cd ..
-   ```
-
-4. **Run the Python backend server (legacy/local-dev only — production uses the Drogon C++ server):**
-   ```bash
-   python legacy/server.py
-   ```
-   *Alternatively, run with Gunicorn:*
-   ```bash
-   cd legacy && gunicorn --bind 0.0.0.0:3000 --workers 1 --threads 2 server:app
-   ```
-
-5. Open `http://localhost:3000` in your web browser.
+### Project structure
+```
+drogon_server/      C++ server (Drogon): static files, stem separation jobs, waveform peaks
+public/js/main.js   entry point (ES modules, no build step)
+public/js/core/     shared helpers: DOM, the single AudioContext, view routing
+public/js/lehra/    Lehra player: real-time engine (engine.js + engine.worklet.js), controls, metronome, riyaz
+public/js/notation/ Notation Editor
+public/separator/   exported Stem Separator app (source in stem-frontend/)
+assets/             lehra recordings, tanpura, metronome sounds
+tests/              unit tests (node --test) and the server smoke test
+```

@@ -2,6 +2,8 @@
 #include "../models/JobStore.hpp"
 #include "../utils/Subprocess.hpp"
 #include "../utils/ZipUtils.hpp"
+#include "../utils/Security.hpp"
+#include "../utils/Peaks.hpp"
 #include <drogon/drogon.h>
 #include <json/json.h>
 #include <fstream>
@@ -154,60 +156,18 @@ void JobWorkerPool::processJob(const std::string& jobId, const std::filesystem::
     std::filesystem::path zipPath = stemsDir / (jobId + "_stems.zip");
     utils::ZipUtils::createStemsZip(outDir, zipPath);
 
-    // Compute Waveform Peaks via C++ sidecar or fallback
+    // Waveform peaks for the separator's multitrack view.
     std::filesystem::path peaksPath = outDir / "peaks.json";
-    bool peaksSuccess = false;
-    // Call the C++ peaks sidecar via curl subprocess (avoids Drogon HttpClient sync API issues)
-    try {
-        // Build JSON body
-        Json::Value reqJson;
-        Json::Value filesArray(Json::arrayValue);
+    {
+        std::vector<std::pair<std::string, std::vector<float>>> stemPeaks;
         for (const auto& stem : expectedStems) {
-            std::filesystem::path stemFile = outDir / stem;
-            if (std::filesystem::exists(stemFile)) {
-                filesArray.append(std::filesystem::absolute(stemFile).string());
+            const std::filesystem::path stemFile = outDir / stem;
+            if (std::filesystem::exists(stemFile, ec)) {
+                stemPeaks.emplace_back(stemFile.stem().string(), utils::computeMp3Peaks(stemFile.string(), 800));
             }
         }
-        reqJson["files"] = filesArray;
-        reqJson["resolution"] = 800;
-        std::string body = Json::FastWriter().write(reqJson);
-
-        // Write body to a temp file
-        std::filesystem::path bodyFile = outDir / "peaks_req.json";
-        {
-            std::ofstream bf(bodyFile);
-            bf << body;
-        }
-
-        // Call sidecar via curl and capture response to peaks.json
-        std::vector<std::string> curlCmd = {
-            "curl", "-sf", "--max-time", "30",
-            "-X", "POST",
-            "-H", "Content-Type: application/json",
-            "-d", "@" + bodyFile.string(),
-            "-o", peaksPath.string(),
-            "http://127.0.0.1:3001/peaks"
-        };
-        int curlExit = utils::Subprocess::run(curlCmd);
-        std::error_code ec2;
-        std::filesystem::remove(bodyFile, ec2);
-
-        if (curlExit == 0 && std::filesystem::exists(peaksPath, ec2) && std::filesystem::file_size(peaksPath, ec2) > 2) {
-            peaksSuccess = true;
-            LOG_INFO << "[JobWorkerPool] Peaks generated via sidecar for job " << jobId;
-        }
-    } catch (...) {
-        LOG_WARN << "[JobWorkerPool] Sidecar curl call failed for job " << jobId;
-    }
-
-    if (!peaksSuccess) {
-        LOG_WARN << "[JobWorkerPool] Falling back to Python librosa peaks script for job " << jobId;
-        std::vector<std::string> fallbackCmd = {
-            "python3", "pitch_shift_fallback.py",
-            "--mode", "peaks",
-            "--dir", outDir.string()
-        };
-        utils::Subprocess::run(fallbackCmd);
+        std::ofstream peaksOut(peaksPath, std::ios::trunc);
+        peaksOut << utils::peaksToJson(stemPeaks);
     }
 
     store.setJobPaths(jobId, outDir, zipPath, peaksPath);
@@ -219,6 +179,48 @@ void JobWorkerPool::processJob(const std::string& jobId, const std::filesystem::
         std::filesystem::remove(inputPath, ec);
     }
     LOG_INFO << "[JobWorkerPool] Job " << jobId << " successfully completed.";
+}
+
+void JobWorkerPool::sweepExpired(std::chrono::seconds maxAge) {
+    namespace fs = std::filesystem;
+    auto& store = models::JobStore::instance();
+
+    // Forget finished jobs past their lifetime (their files go below).
+    for (const auto& id : store.finishedJobsOlderThan(maxAge)) {
+        store.deleteJob(id);
+    }
+
+    // Delete old uploads and results by age on disk. That also catches files
+    // left behind by a restart (the job store lives in memory). Files of jobs
+    // that are still queued or running are never touched.
+    const auto cutoff = fs::file_time_type::clock::now() - maxAge;
+    const fs::path uploadsDir = fs::current_path() / "uploads";
+    std::vector<fs::path> expired;
+    for (const fs::path& dir : {uploadsDir, uploadsDir / "stems"}) {
+        std::error_code ec;
+        for (fs::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec)) {
+            // Entries are named after their job: <id>.<ext>, out_<id>, <id>_stems.zip
+            std::string name = it->path().filename().string();
+            if (name.rfind("out_", 0) == 0) name = name.substr(4);
+            const std::string id = name.substr(0, 36);
+            if (!utils::isValidJobId(id)) continue;  // e.g. stems/ itself, Demucs' temp dir
+
+            auto job = store.getJob(id);
+            if (job && (job->status == models::JobStatus::Queued ||
+                        job->status == models::JobStatus::Processing)) continue;
+
+            std::error_code tec;
+            const auto modified = fs::last_write_time(it->path(), tec);
+            if (!tec && modified < cutoff) expired.push_back(it->path());
+        }
+    }
+    for (const auto& p : expired) {
+        std::error_code ec;
+        fs::remove_all(p, ec);
+    }
+    if (!expired.empty()) {
+        LOG_INFO << "[JobWorkerPool] Removed " << expired.size() << " expired upload/result entries.";
+    }
 }
 
 } // namespace lehra::services

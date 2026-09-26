@@ -3,6 +3,7 @@
 #include <drogon/HttpResponse.h>
 #include <filesystem>
 #include <algorithm>
+#include <set>
 
 namespace lehra::controllers {
 
@@ -103,35 +104,53 @@ void StaticController::getRoot(const drogon::HttpRequestPtr& req,
                                std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
     if (handleOptions(req, callback)) return;
     std::filesystem::path indexFile = std::filesystem::current_path() / "index.html";
-    serveSafeFile(indexFile, indexFile.parent_path(), 3600, {}, callback);
+    // max-age=0: a deploy must reach visitors on their next load.
+    serveSafeFile(indexFile, indexFile.parent_path(), 0, {}, callback);
 }
 
 void StaticController::getRootIndex(const drogon::HttpRequestPtr& req,
                                     std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
     if (handleOptions(req, callback)) return;
     std::filesystem::path indexFile = std::filesystem::current_path() / "index.html";
-    serveSafeFile(indexFile, indexFile.parent_path(), 3600, {}, callback);
+    // max-age=0: a deploy must reach visitors on their next load.
+    serveSafeFile(indexFile, indexFile.parent_path(), 0, {}, callback);
 }
 
 void StaticController::getCatchAll(const drogon::HttpRequestPtr& req,
                                    std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
     if (handleOptions(req, callback)) return;
 
+    // Only the website itself is public: these root files and public/
+    // (assets/, separator/ and _next/ have their own routes). Everything else
+    // in the app directory — sources, config, binaries, uploads — is not.
+    static const std::set<std::string> kRootFiles = {"sw.js", "manifest.json", "favicon.ico"};
+    // Client-side routes handled by initNavigation() in public/js/core/navigation.js.
+    static const std::set<std::string> kSpaRoutes = {"lehra", "hindustani", "carnatic", "notation"};
+
     std::string path = req->path();
-    if (path.compare(0, 5, "/api/") == 0) {
-        auto resp = drogon::HttpResponse::newHttpResponse();
-        resp->setStatusCode(drogon::k404NotFound);
-        utils::addCorsHeaders(resp);
-        callback(resp);
+    std::string rel = path.empty() ? "" : (path[0] == '/' ? path.substr(1) : path);
+    while (!rel.empty() && rel.back() == '/') rel.pop_back();
+    std::filesystem::path baseDir = std::filesystem::current_path();
+
+    if (kSpaRoutes.count(rel)) {
+        serveSafeFile(baseDir / "index.html", baseDir, 0, {}, callback);
+        return;
+    }
+    if (kRootFiles.count(rel)) {
+        serveSafeFile(baseDir / rel, baseDir, 0, {}, callback);
+        return;
+    }
+    if (rel.compare(0, 7, "public/") == 0) {
+        // max-age=0: ES modules are imported without version query strings,
+        // so they must revalidate or a deploy could mix old and new modules.
+        serveSafeFile(baseDir / rel, baseDir / "public", 0, {}, callback);
         return;
     }
 
-    std::string rel = path.empty() ? "" : (path[0] == '/' ? path.substr(1) : path);
-    std::filesystem::path baseDir = std::filesystem::current_path();
-    std::filesystem::path target = baseDir / rel;
-    std::filesystem::path fallback = baseDir / "index.html";
-
-    serveSafeFile(target, baseDir, 3600, fallback, callback);
+    auto resp = drogon::HttpResponse::newHttpResponse();
+    resp->setStatusCode(drogon::k404NotFound);
+    utils::addCorsHeaders(resp);
+    callback(resp);
 }
 
 } // namespace lehra::controllers

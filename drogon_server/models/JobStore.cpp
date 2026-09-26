@@ -48,6 +48,7 @@ std::string JobStore::createJob() {
     job.id = id;
     job.status = JobStatus::Queued;
     job.progress = 0;
+    job.created_at = std::chrono::steady_clock::now();
     jobs_[id] = std::move(job);
     return id;
 }
@@ -108,6 +109,29 @@ std::optional<Job> JobStore::getJob(const std::string& id) const {
 bool JobStore::deleteJob(const std::string& id) {
     std::unique_lock<std::shared_mutex> lock(mutex_);
     return jobs_.erase(id) > 0;
+}
+
+std::size_t JobStore::activeJobCount() const {
+    std::shared_lock<std::shared_mutex> lock(mutex_);
+    std::size_t n = 0;
+    for (const auto& entry : jobs_) {
+        const JobStatus s = entry.second.status;
+        if (s == JobStatus::Queued || s == JobStatus::Processing) ++n;
+    }
+    return n;
+}
+
+std::vector<std::string> JobStore::finishedJobsOlderThan(std::chrono::seconds age) const {
+    const auto cutoff = std::chrono::steady_clock::now() - age;
+    std::shared_lock<std::shared_mutex> lock(mutex_);
+    std::vector<std::string> ids;
+    for (const auto& entry : jobs_) {
+        const JobStatus s = entry.second.status;
+        if ((s == JobStatus::Completed || s == JobStatus::Error) && entry.second.created_at < cutoff) {
+            ids.push_back(entry.first);
+        }
+    }
+    return ids;
 }
 
 } // namespace lehra::models

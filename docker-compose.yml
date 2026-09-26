@@ -1,3 +1,7 @@
+# Local development: the same image as production.
+#   docker compose up --build      → http://localhost:3000
+# The website files are mounted from this folder, so frontend edits show up
+# on reload without rebuilding. Changes under drogon_server/ need --build.
 services:
   webapp:
     build: .
@@ -5,3 +9,10 @@ services:
       - "3000:3000"
     environment:
       - PORT=3000
+    volumes:
+      - ./index.html:/app/index.html:ro
+      - ./sw.js:/app/sw.js:ro
+      - ./manifest.json:/app/manifest.json:ro
+      - ./favicon.ico:/app/favicon.ico:ro
+      - ./public:/app/public:ro
+      - ./assets:/app/assets:ro

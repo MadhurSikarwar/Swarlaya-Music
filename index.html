@@ -12,10 +12,13 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@300;400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="public/css/style.css?v=25" />
-  <link rel="manifest" href="manifest.json" />
-  <!-- For PDF Export -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <link rel="stylesheet" href="public/css/style.css?v=26" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/public/icons/icon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/favicon.ico" sizes="48x48" />
+  <link rel="apple-touch-icon" href="/public/icons/apple-touch-icon.png" />
+  <meta name="theme-color" content="#0d0d0d" />
+  <!-- html2pdf (PDF export) is loaded on demand by notation.js -->
 </head>
 
 <body>
@@ -50,6 +53,11 @@
       <a class="nav-btn" href="/separator/" style="text-decoration: none;" data-domain="stem">STEM</a>
     </nav>
     <div class="header-right">
+      <button id="tunerBtn" class="header-icon-btn" title="Swar tuner (microphone)">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M9 2v7a3 3 0 0 0 6 0V2"/><path d="M12 12v10"/><path d="M9 22h6"/>
+        </svg>
+      </button>
       <button id="statsBtn" class="header-icon-btn" title="Riyaz Tracker">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M18 20V10M12 20V4M6 20v-6"/>
@@ -312,6 +320,21 @@
           </div>
           <button class="btn-tap" id="tapTempoBtn" title="Tap Tempo">TAP</button>
         </div>
+
+        <details class="tool-box" id="layaTrainer">
+          <summary>Laya trainer <span class="tool-sub">ramp the tempo every few cycles</span></summary>
+          <div class="tool-grid">
+            <label>Start <input type="number" id="ltStart" class="num-input" value="60" min="20" max="500"></label>
+            <label>Target <input type="number" id="ltTarget" class="num-input" value="120" min="20" max="500"></label>
+            <label>Step <input type="number" id="ltStep" class="num-input" value="5" min="1" max="100"></label>
+            <label>Every <input type="number" id="ltEvery" class="num-input" value="2" min="1" max="64"> cycles</label>
+          </div>
+          <div class="tool-row">
+            <button class="btn-tap" id="ltBtn">Start</button>
+            <div class="tool-progress"><div class="tool-bar" id="ltBar"></div></div>
+          </div>
+          <p class="tool-status" id="ltStatus" aria-live="polite"></p>
+        </details>
       </div>
 
       <div class="playback-controls">
@@ -331,6 +354,24 @@
             </div>
             <span id="tanpuraVolVal" class="vol-val">50%</span>
           </label>
+          <div class="tanpura-options">
+            <select id="tanpuraStyleSelect" class="pitch-select small-select" title="Tanpura sound">
+              <option value="classic">Classic recording</option>
+              <option value="auto">Plucked · auto</option>
+              <option value="male">Plucked · male (Sa C#)</option>
+              <option value="female">Plucked · female (Sa G#)</option>
+            </select>
+            <select id="tanpuraFirstSelect" class="pitch-select small-select" title="First string of the plucked tanpura">
+              <option value="pa">1st string Pa</option>
+              <option value="ma">1st string Ma</option>
+              <option value="ni">1st string Ni</option>
+            </select>
+            <select id="tanpuraPaceSelect" class="pitch-select small-select" title="Plucking pace">
+              <option value="slow">Slow</option>
+              <option value="medium" selected>Medium</option>
+              <option value="fast">Fast</option>
+            </select>
+          </div>
           <label class="vol-label">
             <span class="vol-name">Metronome</span>
             <div class="vol-slider-wrap">
@@ -389,6 +430,11 @@
               <span class="toggle-slider"></span>
               <span class="toggle-text" style="white-space:nowrap;">Khali/Taali Accents</span>
             </label>
+            <label class="toggle-label" title="Play one cycle of metronome before the lehra starts on sam" style="margin-left:4px;">
+              <input type="checkbox" id="countInToggle" class="toggle-checkbox">
+              <span class="toggle-slider"></span>
+              <span class="toggle-text">Count-in</span>
+            </label>
           </div>
           <label class="toggle-label" title="Prevent screen from turning off during playback">
             <input type="checkbox" id="wakeLockToggle" class="toggle-checkbox" checked>
@@ -402,12 +448,44 @@
             </svg>
             <span style="font-size: 0.7rem; margin-left:6px; color: inherit;">Studio FX</span>
           </button>
+          <button id="presetsBtn" class="header-icon-btn" title="Save and apply named presets of your setup">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <span style="font-size: 0.7rem; margin-left:6px; color: inherit;">Presets</span>
+          </button>
         </div>
+
+        <details class="tool-box" id="practiceTimer">
+          <summary>Practice timer <span class="tool-sub">stop on sam after a time or number of cycles</span></summary>
+          <div class="tool-grid">
+            <label>Stop after <input type="number" id="ptAmount" class="num-input" value="10" min="1" max="999"></label>
+            <select id="ptUnit" class="pitch-select small-select" aria-label="Timer unit">
+              <option value="off">— off —</option>
+              <option value="min">minutes</option>
+              <option value="cycles">cycles</option>
+            </select>
+          </div>
+          <div class="tool-row"><div class="tool-progress"><div class="tool-bar" id="ptBar"></div></div></div>
+          <p class="tool-status" id="ptStatus" aria-live="polite"></p>
+        </details>
+
+        <details class="tool-box" id="recorderBox">
+          <summary>Record riyaz <span class="tool-sub">you + the lehra, kept on this device</span></summary>
+          <div class="tool-row rec-row">
+            <button class="btn-tap rec-btn" id="recBtn">● Record</button>
+            <span class="rec-time" id="recTime">0:00</span>
+            <div class="tool-progress rec-meter" title="Microphone level"><div class="tool-bar" id="recMeter"></div></div>
+          </div>
+          <p class="tool-status" id="recStatus" aria-live="polite">Records your microphone with the lehra and tanpura (not the metronome). Takes stay in this tab until you download them.</p>
+          <ul class="take-list" id="takeList"></ul>
+        </details>
 
         <!-- Beat Visualizer -->
         <div class="beat-visualizer">
           <div class="beat-label">Beat Indicator</div>
           <div class="beat-dots" id="beatDots"></div>
+          <div class="theka-row" id="thekaRow" hidden aria-label="Theka"></div>
         </div>
       </div>
 
@@ -469,6 +547,11 @@
               <button class="header-icon-btn" id="nsPlayBtn" title="Play / Pause Notation" style="color: var(--gold); border-color: var(--gold); margin-right: 8px;">
                 <svg id="nsPlayIcon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg>
                 <svg id="nsPauseIcon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none" style="display:none"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
+              </button>
+              <span class="ns-tempo" id="nsTempoLabel" title="Playback follows the Lehra player's tempo"></span>
+              <button class="header-icon-btn" id="nsLibraryBtn" title="Save, open, import/export and share compositions (Ctrl+S saves)">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                <span style="font-size: 0.7rem; margin-left: 6px;">Save / Share</span>
               </button>
               <button class="header-icon-btn" id="nsUndo" title="Undo"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg></button>
               <button class="header-icon-btn" id="nsRedo" title="Redo"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/></svg></button>
@@ -555,8 +638,30 @@
     </div>
   </div>
 
-  <!-- Hidden tanpura audio element -->
-  <audio id="tanpuraAudio" src="/assets/tanpura_06_01.wav" loop crossorigin="anonymous" preload="none"></audio>
+
+  <!-- NOTATION LIBRARY MODAL -->
+  <div class="modal-overlay" id="nsLibraryModal">
+    <div class="modal-content" style="max-width: 520px;">
+      <div class="modal-header">
+        <h2 class="panel-title">Compositions</h2>
+        <button class="modal-close" id="nsLibraryClose">&times;</button>
+      </div>
+      <form class="preset-save-row" id="nsSaveForm">
+        <input type="text" id="nsSaveName" class="text-input" maxlength="80" placeholder="Name" required>
+        <button type="submit" class="header-icon-btn">Save in browser</button>
+      </form>
+      <ul class="preset-list" id="nsLibraryList"></ul>
+      <div class="ns-file-row">
+        <button class="header-icon-btn" id="nsExportJson">Export .json</button>
+        <button class="header-icon-btn" id="nsImportJson">Import .json</button>
+        <input type="file" id="nsImportFile" accept="application/json,.json" hidden>
+        <button class="header-icon-btn" id="nsShareBtn">Copy share link</button>
+      </div>
+      <input type="text" id="nsShareUrl" class="text-input ns-share-url" readonly placeholder="The share link appears here" aria-label="Share link">
+      <p class="tool-status" id="nsLibraryStatus" aria-live="polite"></p>
+      <p class="modal-hint" style="margin: 6px 0 0;">Saved compositions stay in this browser. A share link carries the whole composition inside it — nothing is uploaded.</p>
+    </div>
+  </div>
 
   <!-- Studio Effects Modal -->
   <div id="fxModal" class="modal-overlay">
@@ -588,6 +693,61 @@
           <span id="fxReverbVal" class="vol-val">0%</span>
         </label>
       </div>
+      <div class="fx-section">
+        <label class="toggle-label" title="Routes the sound through a media element so phones show lock-screen / headphone controls and keep playing in the background">
+          <input type="checkbox" id="mediaOutputToggle" class="toggle-checkbox" checked>
+          <span class="toggle-slider"></span>
+          <span class="toggle-text">Lock-screen controls &amp; background playback</span>
+        </label>
+        <p class="modal-hint" style="margin: 8px 0 0;">Turn off if you need the lowest possible latency — the media element adds a small output buffer.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Presets Modal -->
+  <div id="presetsModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 480px;">
+      <div class="modal-header">
+        <h2 class="panel-title">Presets</h2>
+        <button class="modal-close" id="presetsClose">&times;</button>
+      </div>
+      <p class="modal-hint">Saves the instrument, taal, raag, tempo, Sa, volumes, effects and metronome options. Your last setup is also restored automatically.</p>
+      <form class="preset-save-row" id="presetForm">
+        <input type="text" id="presetName" class="text-input" maxlength="40" placeholder="Name, e.g. Morning riyaz" required>
+        <button type="submit" class="header-icon-btn">Save current</button>
+      </form>
+      <ul class="preset-list" id="presetList"></ul>
+    </div>
+  </div>
+
+  <!-- Swar Tuner Modal -->
+  <div id="tunerModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 440px;">
+      <div class="modal-header">
+        <h2 class="panel-title">Swar Tuner</h2>
+        <button class="modal-close" id="tunerClose">&times;</button>
+      </div>
+      <div class="tuner-display" aria-live="polite">
+        <div class="tuner-octave" id="tunerOctave"></div>
+        <div class="tuner-swar" id="tunerSwar">—</div>
+        <div class="tuner-qualifier" id="tunerQualifier"></div>
+        <div class="tuner-gauge" aria-hidden="true">
+          <div class="tuner-zone"></div>
+          <div class="tuner-ticks"><span>−50</span><span>−25</span><span>0</span><span>+25</span><span>+50</span></div>
+          <div class="tuner-needle idle" id="tunerNeedle"></div>
+        </div>
+        <div class="tuner-readout"><span id="tunerCents"></span> <span id="tunerHz"></span></div>
+      </div>
+      <div class="tuner-controls">
+        <span class="tuner-sa">Sa = <strong id="tunerSa">146.83</strong> Hz</span>
+        <select id="tunerIntonation" class="pitch-select small-select" title="Reference intonation">
+          <option value="just">Just intonation</option>
+          <option value="et">Equal temperament</option>
+        </select>
+      </div>
+      <button id="tunerMicBtn" class="btn-tap tuner-mic-btn">Start microphone</button>
+      <p class="tool-status" id="tunerStatus"></p>
+      <p class="modal-hint">Use headphones while the lehra plays so the tuner hears only you. The microphone is only analysed here — never played back, recorded or sent anywhere.</p>
     </div>
   </div>
 
@@ -604,12 +764,18 @@
       <div style="text-align: center; margin-top: 16px; font-size: 0.8rem; color: var(--text-sub);">
         Total Today: <span id="statsTotalToday" style="color: var(--gold); font-weight: bold;">0m</span>
       </div>
+      <div class="goal-box">
+        <div class="goal-row">
+          <label class="goal-label">Daily goal <input type="number" id="statsGoalInput" class="num-input" min="1" max="600" value="15"> min</label>
+          <span class="goal-streak">Streak: <strong id="statsStreak">—</strong></span>
+        </div>
+        <div class="tool-progress"><div class="tool-bar" id="statsGoalBar"></div></div>
+        <p class="tool-status" id="statsGoalText"></p>
+      </div>
     </div>
   </div>
 
-  <script src="public/js/catalogue.js?v=22"></script>
-  <script src="public/js/notation.js?v=22"></script>
-  <script src="public/js/app.js?v=22"></script>
+  <script type="module" src="/public/js/main.js"></script>
   <!-- View entrance animation hook (non-breaking, additive) -->
   <script>
     (function() {

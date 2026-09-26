@@ -6,6 +6,8 @@
 #include <shared_mutex>
 #include <optional>
 #include <filesystem>
+#include <chrono>
+#include <cstddef>
 #include <json/json.h>
 
 namespace lehra::models {
@@ -21,6 +23,7 @@ struct Job {
     std::filesystem::path output_dir;
     std::filesystem::path zip_path;
     std::filesystem::path peaks_path;
+    std::chrono::steady_clock::time_point created_at{};
 
     Json::Value toJson() const;
 };
@@ -50,6 +53,11 @@ public:
 
     std::optional<Job> getJob(const std::string& id) const;
     bool deleteJob(const std::string& id);
+
+    /// Jobs still queued or being processed.
+    std::size_t activeJobCount() const;
+    /// Completed or failed jobs created more than `age` ago.
+    std::vector<std::string> finishedJobsOlderThan(std::chrono::seconds age) const;
 
 private:
     JobStore() = default;

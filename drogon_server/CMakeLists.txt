@@ -25,10 +25,10 @@ set(SOURCES
     utils/Security.cpp
     utils/Subprocess.cpp
     utils/ZipUtils.cpp
+    utils/Peaks.cpp
     models/JobStore.cpp
     services/JobWorkerPool.cpp
-    services/AudioProcessorService.cpp
-    controllers/AudioController.cpp
+    controllers/HealthController.cpp
     controllers/StemController.cpp
     controllers/StaticController.cpp
 )

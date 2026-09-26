@@ -21,3 +21,6 @@ out/
 .venv/
 venv/
 env/
+
+# Root dev tools (eslint)
+node_modules/

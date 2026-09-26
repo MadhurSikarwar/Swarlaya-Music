@@ -1,13 +1,27 @@
-__pycache__
-*.pyc
-*.pyo
-*.pyd
+# Note: unlike .gitignore, a pattern here only matches at the root of the
+# build context unless it starts with **/ — hence the explicit **/ forms.
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
 .git
 .gitignore
+.env
+**/.DS_Store
+
+# Runtime data (recreated by the server)
 audio_cache/*
 uploads/*
+separated/
+
+# Not needed in the build: the separator ships as its exported build in
+# public/separator; tests and CI config aren't part of the image.
+**/node_modules
+stem-frontend/
+tests/
+.github/
+
+# Stray media at the root of the context (the app's audio lives in assets/)
 *.wav
 *.mp3
 *.ogg
-node_modules
-.DS_Store

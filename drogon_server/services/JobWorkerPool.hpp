@@ -8,12 +8,13 @@
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+#include <chrono>
 #include <utility>
 
 namespace lehra::services {
 
 /**
- * @brief Bounded 2-Thread Worker Pool for Demucs AI Stem Separation.
+ * @brief Bounded worker pool for Demucs AI stem separation (main.cpp starts one worker).
  * 
  * Replaces Python's unbounded thread creation + semaphore pattern.
  * By using a fixed-size worker queue, we eliminate thread overhead and guarantee
@@ -29,6 +30,9 @@ public:
     void start(size_t numWorkers = 2);
     void stop();
     void enqueueJob(const std::string& jobId, const std::filesystem::path& inputPath);
+
+    /// Delete uploads/results older than maxAge and forget their finished jobs.
+    void sweepExpired(std::chrono::seconds maxAge);
 
 private:
     JobWorkerPool() = default;

@@ -1,6 +1,6 @@
 #include <drogon/drogon.h>
-#include "services/AudioProcessorService.hpp"
 #include "services/JobWorkerPool.hpp"
+#include <chrono>
 #include <filesystem>
 #include <iostream>
 #include <cstdlib>
@@ -15,12 +15,10 @@ int main(int argc, char* argv[]) {
         // Ensure runtime directories exist
         std::error_code ec;
         std::filesystem::create_directories("uploads/stems", ec);
-        std::filesystem::create_directories("audio_cache", ec);
         std::filesystem::create_directories("assets", ec);
 
-        // Start background worker pools & cache maintenance services
-        lehra::services::AudioProcessorService::instance().start();
-        lehra::services::JobWorkerPool::instance().start(2); // 2 dedicated Demucs worker threads
+        // One Demucs separation at a time: each needs several GB of RAM.
+        lehra::services::JobWorkerPool::instance().start(1);
 
         // Load Drogon configuration from config.json if available
         if (std::filesystem::exists("drogon_server/config.json")) {
@@ -30,7 +28,7 @@ int main(int argc, char* argv[]) {
         } else {
             LOG_WARN << "config.json not found! Using fallback configuration (4 I/O threads).";
             drogon::app().setThreadNum(4);
-            drogon::app().setClientMaxBodySize(500ULL * 1024ULL * 1024ULL);
+            drogon::app().setClientMaxBodySize(100ULL * 1024ULL * 1024ULL);
         }
 
         // Determine listener port from $PORT environment variable or default to 3000
@@ -49,12 +47,17 @@ int main(int argc, char* argv[]) {
             LOG_INFO << "Lehra Studio Drogon server successfully started and listening on 0.0.0.0:" << port;
         });
 
+        // Stem-separation uploads and results are deleted an hour after the
+        // job was created (checked every 10 minutes).
+        drogon::app().getLoop()->runEvery(10 * 60, [] {
+            lehra::services::JobWorkerPool::instance().sweepExpired(std::chrono::hours(1));
+        });
+
         // Run HTTP server event loop (blocks until shutdown signal)
         drogon::app().run();
 
         LOG_INFO << "Server shutting down. Stopping background services...";
         lehra::services::JobWorkerPool::instance().stop();
-        lehra::services::AudioProcessorService::instance().stop();
         LOG_INFO << "Shutdown complete. Goodbye!";
     } catch (const std::exception& e) {
         std::cerr << "FATAL ERROR: Unhandled exception in main: " << e.what() << std::endl;

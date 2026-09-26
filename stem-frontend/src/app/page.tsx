@@ -20,9 +20,10 @@ import {
 import axios from "axios";
 import WaveSurfer from "wavesurfer.js";
 
-const API_BASE = process.env.NODE_ENV === "development"
-  ? "http://localhost:5000"
-  : (process.env.NEXT_PUBLIC_API_BASE || ""); // Allows pointing to an external backend URL if frontend is hosted separately
+// NEXT_PUBLIC_API_BASE points at an external backend if the frontend is hosted
+// separately. In `npm run dev` (port 3001) the backend is the local server on 3000.
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE
+  || (process.env.NODE_ENV === "development" ? "http://localhost:3000" : "");
 
 const STEMS = ["vocals", "drums", "bass", "guitar", "piano", "other"] as const;
 
@@ -87,9 +88,19 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        const errText = await response.text();
-        console.error('Upload Error:', errText);
-        throw new Error('Upload failed: ' + errText);
+        let message = `Upload failed (${response.status}).`;
+        if (response.status === 413) {
+          message = "File is too large. Maximum size is 100MB.";
+        } else {
+          try {
+            const body = await response.json();
+            if (body?.error) message = body.error;
+          } catch {
+            // not JSON — keep the generic message
+          }
+        }
+        console.error('Upload Error:', response.status, message);
+        throw new Error(message);
       }
 
       const data = await response.json();

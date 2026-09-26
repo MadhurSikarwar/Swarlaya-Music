@@ -65,6 +65,12 @@ void StemController::separate(const drogon::HttpRequestPtr& req,
         return sendJsonError(400, "Unsupported file extension: " + ext, callback);
     }
 
+    // Separations run one at a time; don't let a backlog pile up behind it.
+    constexpr std::size_t kMaxActiveJobs = 4;
+    if (models::JobStore::instance().activeJobCount() >= kMaxActiveJobs) {
+        return sendJsonError(503, "The separator is busy right now. Please try again in a few minutes.", callback);
+    }
+
     std::string jobId = models::JobStore::instance().createJob();
     std::filesystem::path uploadsDir = std::filesystem::current_path() / "uploads";
     std::error_code ec;
