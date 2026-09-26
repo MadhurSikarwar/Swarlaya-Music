@@ -5,7 +5,7 @@
  */
 import { $, trackSliderFill } from '../core/dom.js';
 import { getAudioContext } from '../core/audio-context.js';
-import { getMasterOutput, startMediaOutput } from '../core/audio-output.js';
+import { getMasterOutput, startMediaOutput, stopMediaOutput } from '../core/audio-output.js';
 import { clearMediaSession, setMediaPlaybackState, showMediaSession } from '../core/media-session.js';
 import { setShrutiOutput, setShrutiSa, shrutiPlaying, startShruti, stopShruti } from './shruti.js';
 import { KATTAI, TALAS } from './talas.js';
@@ -106,11 +106,13 @@ function resume() {
 
 /** Stop everything (leaving the page, or the lock-screen stop button). */
 export function stopAll() {
+  const wasActive = talamRunning() || shrutiPlaying() || resumeWhat;
   resumeWhat = null;
   stopTalam();
   stopShruti();
   syncButtons();
   updateSession();
+  if (wasActive) stopMediaOutput(); // hand the output back from the lock-screen element
 }
 
 // ── UI ─────────────────────────────────────────────────────────────
@@ -191,6 +193,7 @@ export function initCarnatic() {
     resumeWhat = null;
     syncButtons();
     updateSession();
+    if (!talamRunning() && !shrutiPlaying()) stopMediaOutput();
   });
 
   // Talam
@@ -220,6 +223,7 @@ export function initCarnatic() {
     resumeWhat = null;
     syncButtons();
     updateSession();
+    if (!talamRunning() && !shrutiPlaying()) stopMediaOutput();
   });
 
   trackSliderFill($('shrutiVol'));

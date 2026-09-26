@@ -8,7 +8,7 @@
  */
 import { $, fillSlider, trackSliderFill } from '../core/dom.js';
 import { getAudioContext } from '../core/audio-context.js';
-import { getMasterOutput, outputLatency, startMediaOutput } from '../core/audio-output.js';
+import { getMasterOutput, outputLatency, startMediaOutput, stopMediaOutput } from '../core/audio-output.js';
 import { clearMediaSession, setMediaPlaybackState, showMediaSession } from '../core/media-session.js';
 import { LehraEngine, buildTanpuraLoop, songBpm } from '../lehra/engine.js';
 import { TANPURA_BASE_HZ, TANPURA_URL, state as lehraState } from '../lehra/state.js';
@@ -34,6 +34,7 @@ let speed = 1;
 let looping = true;
 let posTimer = 0;
 let seeking = false;
+let usingMediaOutput = false; // this page took the lock-screen output
 
 function message(text, isError = false) {
   const el = $('practiceMessage');
@@ -173,6 +174,7 @@ function mediaInfo() {
 async function play() {
   if (!song || playing) return;
   startMediaOutput(); // within the click, for lock-screen controls
+  usingMediaOutput = true;
   await ensureEngine();
   const ctx = getAudioContext();
   if (ctx.state === 'suspended') await ctx.resume();
@@ -197,6 +199,10 @@ function stop() {
   resumeAt = 0;
   syncTransport();
   clearMediaSession(MEDIA_ACTIONS);
+  if (usingMediaOutput) {
+    stopMediaOutput();
+    usingMediaOutput = false;
+  }
 }
 
 function syncTransport() {
