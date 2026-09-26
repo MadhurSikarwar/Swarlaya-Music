@@ -56,3 +56,6 @@ env/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Static build for Vercel (node tools/build-static.mjs)
+dist/

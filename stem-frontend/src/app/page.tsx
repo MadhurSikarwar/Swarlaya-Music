@@ -43,6 +43,14 @@ export default function Home() {
   const [errorMsg, setErrorMsg] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [mode, setMode] = useState<Mode>("6stems");
+  // null = still checking; false = this site has no separation server
+  // (static hosting such as Vercel, or the local dev server)
+  const [serverAvailable, setServerAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/status`)
+      .then(res => setServerAvailable(res.ok), () => setServerAvailable(false));
+  }, []);
   const [stems, setStems] = useState<string[]>(STEMS_FOR["6stems"]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -84,7 +92,7 @@ export default function Home() {
   };
 
   const startSeparation = async () => {
-    if (!file) return;
+    if (!file || serverAvailable === false) return;
     setStatus("uploading");
 
     const formData = new FormData();
@@ -204,8 +212,27 @@ export default function Home() {
               transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
               className="w-full max-w-2xl flex flex-col items-center"
             >
+              {serverAvailable === false && (
+                <div className="glass-panel w-full flex flex-col items-center text-center gap-4 p-8 sm:p-12">
+                  <Layers className="w-10 h-10 text-[#f5a623]" />
+                  <h3 className="text-xl sm:text-2xl font-semibold text-white">Not available on this site</h3>
+                  <p className="text-zinc-400 max-w-md leading-relaxed">
+                    Separating songs needs an AI server (Demucs), which this deployment doesn&apos;t run.
+                    Everything else — the Lehra player, tuner, notation editor and Carnatic suite — works here.
+                    To separate songs, run the full site on your own computer with Docker (see the README).
+                  </p>
+                  {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- the main site, outside this app's /separator basePath */}
+                  <a href="/" className="glass-button px-6 py-3 rounded-xl text-white font-semibold no-underline">
+                    Back to Swaralaya
+                  </a>
+                </div>
+              )}
+
               {/* Premium Glass Upload Card */}
-              <div className="glass-panel w-full flex flex-col items-center relative group p-8 sm:p-12 md:p-20">
+              <div
+                className="glass-panel w-full flex flex-col items-center relative group p-8 sm:p-12 md:p-20"
+                style={{ display: serverAvailable === false ? "none" : undefined }}
+              >
 
                 {!file ? (
                   <div

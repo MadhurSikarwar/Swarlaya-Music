@@ -176,6 +176,15 @@ python tools/dev_server.py
 ```
 Open **`http://localhost:3000`** (pass another port if 3000 is taken: `python tools/dev_server.py 3001`). It serves the site exactly like the real server — `/lehra`, `/notation`, `/practice` links work, and edited files reload fresh — and answers the separator's API with a message pointing to Docker.
 
+### 3. Host it for free on Vercel
+The website is static files, so it runs on Vercel's free Hobby plan (no sleeping, HTTPS, global CDN). Everything works there except the Stem Separator and Practise Along, which need the AI server — on Vercel those pages say so instead of failing.
+
+1. Sign in at [vercel.com](https://vercel.com) with GitHub → **Add New… → Project** → import this repository.
+2. Leave every setting as it is — [`vercel.json`](vercel.json) already sets the build (`node tools/build-static.mjs`, output `dist`), the page links (`/lehra`, `/notation`, …) and caching.
+3. **Deploy.** Every push to `main` redeploys automatically.
+
+To check the build locally first: `node tools/build-static.mjs` (writes `dist/`). If you later run the separator server somewhere (e.g. Azure Container Apps), add a rewrite in `vercel.json` sending `/api/(.*)` to `https://<your-server>/api/$1` and both pages start working.
+
 ---
 
 ## 🎛️ Core Features

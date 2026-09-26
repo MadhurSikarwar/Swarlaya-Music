@@ -32,6 +32,7 @@ export default function RootLayout({
 
         {/* Header */}
         <header className="site-header">
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- the main site, outside this app's /separator basePath */}
           <a href="/" style={{ textDecoration: 'none', color: 'inherit' }}>
             <div className="logo">
               <svg className="logo-icon" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">

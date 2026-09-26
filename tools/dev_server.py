@@ -87,9 +87,9 @@ class Handler(SimpleHTTPRequestHandler):
 
     def handle_get(self):
         path = urlsplit(self.path).path
-        if path in ('/health', '/api/status', '/api/health'):
+        if path == '/health':  # the launcher waits for this
             return self.send_json(200, {'status': 'ok', 'server': 'dev (no stem separation)'})
-        if path.startswith('/api/'):
+        if path.startswith('/api/'):  # incl. /api/status: the pages check it to see if the separator is here
             return self.send_json(503, {'error': API_MESSAGE})
         target = self.resolve(path)
         if not target or not os.path.isfile(target):

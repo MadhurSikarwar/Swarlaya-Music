@@ -54,6 +54,13 @@ function expired() {
   $('practiceSeparatorLink').hidden = false;
 }
 
+/** Whether this site has the separator's server (static hosting and the dev server don't). */
+let serverCheck = null;
+function separatorAvailable() {
+  if (!serverCheck) serverCheck = fetch('/api/status').then(r => r.ok, () => false);
+  return serverCheck;
+}
+
 async function api(path) {
   const res = await fetch(path);
   if (res.status === 404) { const e = new Error('expired'); e.expired = true; throw e; }
@@ -269,6 +276,10 @@ export async function openPracticeFromUrl() {
   stop();
   $('practiceControls').hidden = true;
   $('practiceSeparatorLink').hidden = true;
+  if (!(await separatorAvailable())) {
+    message('Practise Along plays songs from the Stem Separator, which needs its server — it isn’t running on this site. Run the full site with Docker to use it (see the README).');
+    return;
+  }
   if (!id) {
     message('Separate a song in the Stem Separator, then choose “Practise along” to play its accompaniment here.');
     $('practiceSeparatorLink').hidden = false;
