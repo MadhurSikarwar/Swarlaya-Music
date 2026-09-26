@@ -33,17 +33,17 @@ void JobWorkerPool::stop() {
     LOG_INFO << "[JobWorkerPool] Stopped.";
 }
 
-void JobWorkerPool::enqueueJob(const std::string& jobId, const std::filesystem::path& inputPath) {
+void JobWorkerPool::enqueueJob(const std::string& jobId, const std::filesystem::path& inputPath, bool twoStems) {
     {
         std::lock_guard<std::mutex> lock(queueMutex_);
-        queue_.emplace_back(jobId, inputPath);
+        queue_.push_back(Task{jobId, inputPath, twoStems});
     }
     cv_.notify_one();
 }
 
 void JobWorkerPool::workerLoop() {
     while (running_) {
-        std::pair<std::string, std::filesystem::path> task;
+        Task task;
         {
             std::unique_lock<std::mutex> lock(queueMutex_);
             cv_.wait(lock, [this] { return !queue_.empty() || !running_; });
@@ -52,19 +52,21 @@ void JobWorkerPool::workerLoop() {
             queue_.pop_front();
         }
         try {
-            processJob(task.first, task.second);
+            processJob(task);
         } catch (const std::exception& e) {
-            LOG_ERROR << "[JobWorkerPool] Unhandled exception in job " << task.first << ": " << e.what();
-            models::JobStore::instance().setJobError(task.first, e.what());
-            if (std::filesystem::exists(task.second)) {
+            LOG_ERROR << "[JobWorkerPool] Unhandled exception in job " << task.jobId << ": " << e.what();
+            models::JobStore::instance().setJobError(task.jobId, e.what());
+            if (std::filesystem::exists(task.inputPath)) {
                 std::error_code ec;
-                std::filesystem::remove(task.second, ec);
+                std::filesystem::remove(task.inputPath, ec);
             }
         }
     }
 }
 
-void JobWorkerPool::processJob(const std::string& jobId, const std::filesystem::path& inputPath) {
+void JobWorkerPool::processJob(const Task& task) {
+    const std::string& jobId = task.jobId;
+    const std::filesystem::path& inputPath = task.inputPath;
     auto& store = models::JobStore::instance();
     store.updateJobStatus(jobId, models::JobStatus::Processing);
     store.updateJobProgress(jobId, 10);
@@ -80,9 +82,15 @@ void JobWorkerPool::processJob(const std::string& jobId, const std::filesystem::
         "--out", stemsDir.string(),
         "-n", "htdemucs_6s",
         "--float32", "--mp3",
-        "--shifts", "1", "--overlap", "0.25",
-        inputPath.string()
+        "--shifts", "1", "--overlap", "0.25"
     };
+    if (task.twoStems) {
+        // Same model, but only vocals + the sum of everything else get
+        // written (and encoded), which is what makes it faster.
+        cmd.push_back("--two-stems");
+        cmd.push_back("vocals");
+    }
+    cmd.push_back(inputPath.string());
 
     std::set<int> milestones;
     auto onLog = [&](const std::string& line) {
@@ -106,9 +114,10 @@ void JobWorkerPool::processJob(const std::string& jobId, const std::filesystem::
                     if (pct >= 50 && milestones.insert(50).second)
                         store.appendJobLog(jobId, "Separating harmonic and percussive components...");
                     if (pct >= 65 && milestones.insert(65).second)
-                        store.appendJobLog(jobId, "Isolating vocals and drums...");
+                        store.appendJobLog(jobId, task.twoStems ? "Isolating the vocals..." : "Isolating vocals and drums...");
                     if (pct >= 80 && milestones.insert(80).second)
-                        store.appendJobLog(jobId, "Extracting bass, guitar, and piano stems...");
+                        store.appendJobLog(jobId, task.twoStems ? "Mixing the accompaniment (everything but the vocals)..."
+                                                                : "Extracting bass, guitar, and piano stems...");
                     if (pct >= 90 && milestones.insert(90).second)
                         store.appendJobLog(jobId, "Finalizing audio rendering and saving outputs...");
                 }
@@ -137,9 +146,9 @@ void JobWorkerPool::processJob(const std::string& jobId, const std::filesystem::
 
     // Demucs outputs to <stemsDir>/htdemucs_6s/<inputStem>/<stem>.mp3
     std::filesystem::path modelOutDir = stemsDir / "htdemucs_6s" / inputPath.stem();
-    const std::vector<std::string> expectedStems = {
-        "vocals.mp3", "drums.mp3", "bass.mp3", "guitar.mp3", "piano.mp3", "other.mp3"
-    };
+    const std::vector<std::string> expectedStems = task.twoStems
+        ? std::vector<std::string>{"vocals.mp3", "no_vocals.mp3"}
+        : std::vector<std::string>{"vocals.mp3", "drums.mp3", "bass.mp3", "guitar.mp3", "piano.mp3", "other.mp3"};
 
     if (std::filesystem::exists(modelOutDir)) {
         for (const auto& stem : expectedStems) {

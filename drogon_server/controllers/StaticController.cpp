@@ -125,7 +125,7 @@ void StaticController::getCatchAll(const drogon::HttpRequestPtr& req,
     // in the app directory — sources, config, binaries, uploads — is not.
     static const std::set<std::string> kRootFiles = {"sw.js", "manifest.json", "favicon.ico"};
     // Client-side routes handled by initNavigation() in public/js/core/navigation.js.
-    static const std::set<std::string> kSpaRoutes = {"lehra", "hindustani", "carnatic", "notation"};
+    static const std::set<std::string> kSpaRoutes = {"lehra", "hindustani", "carnatic", "notation", "practice"};
 
     std::string path = req->path();
     std::string rel = path.empty() ? "" : (path[0] == '/' ? path.substr(1) : path);

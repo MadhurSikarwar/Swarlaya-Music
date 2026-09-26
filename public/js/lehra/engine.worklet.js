@@ -390,6 +390,10 @@ class LehraDSP {
         if (msg.seq !== undefined) this.seq = msg.seq;
         this.switchRaag(msg.id, !!msg.resetPhase);
         break;
+      case 'seek':
+        if (msg.seq !== undefined) this.seq = msg.seq;
+        this.seekTo(msg.phase);
+        break;
       case 'stop':
         if (this.playing && !this.started) this.playing = false; // nothing sounded yet (count-in)
         else if (this.playing && this.stopFade < 0) this.stopFade = Math.round(STOP_FADE_SEC * this.sr);
@@ -422,7 +426,7 @@ class LehraDSP {
     this.started = false;
     this.stopFade = -1;
     this.startFrame = msg.startFrame;
-    this.phase = 0;
+    this.phase = LehraDSP.wrapPhase(msg.startPhase || 0); // e.g. a song resumed mid-way
     this.beatBase = 0;
     this.anchor = null;
     this.tanpuraLevel = 0;
@@ -490,6 +494,24 @@ class LehraDSP {
     }
     this.current = raag;
     this.spawnVoice(raag, this.bestSegment(raag).index, this.phase, true);
+    this.reanchor();
+    this.pendingReport = true;
+  }
+
+  static wrapPhase(p) {
+    return Number.isFinite(p) ? p - Math.floor(p) : 0;
+  }
+
+  /**
+   * Jump to `phase` (0–1) of the current cycle — for a song (one "cycle"
+   * covering the whole track), a position in it. Crossfades like a
+   * segment change; the beat count continues from the same cycle.
+   */
+  seekTo(phase) {
+    const p = LehraDSP.wrapPhase(phase);
+    if (!this.playing || !this.started || !this.current) { this.phase = p; return; }
+    this.phase = p;
+    this.spawnVoice(this.current, this.bestSegment(this.current).index, p, true);
     this.reanchor();
     this.pendingReport = true;
   }
@@ -570,7 +592,7 @@ class LehraDSP {
       this.startFrame = blockFrame + offset;
       this.genFrame = this.startFrame;
       this.voices = [];
-      this.spawnVoice(this.current, this.bestSegment(this.current).index, 0, false);
+      this.spawnVoice(this.current, this.bestSegment(this.current).index, this.phase, false);
       this.startFadeLen = this.startFade = Math.max(1, Math.round(START_FADE_SEC * this.sr));
       this.pendingReport = true;
     }

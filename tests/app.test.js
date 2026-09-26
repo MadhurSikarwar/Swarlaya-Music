@@ -1,7 +1,7 @@
 // Tests for browser-side helpers that don't need a DOM.  Run: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { localDateKey, riyazStreak } from '../public/js/lehra/riyaz.js';
 import { CATALOGUE } from '../public/js/lehra/catalogue.js';
@@ -226,10 +226,16 @@ test('service worker: pages/scripts network-first, audio cache-first, offline fa
   assert.equal((await sw.fetchVia('/assets/Esraj_Teentaal_Sohini.aac')).status, 200, 'offline audio');
 });
 
-test('service worker precaches only files that exist', () => {
+test('service worker precaches only files that exist — and every site module', () => {
   const src = readFileSync(new URL('../sw.js', import.meta.url), 'utf8');
   const list = vm.runInNewContext(src.match(/const ASSETS = (\[[\s\S]*?\]);/)[1]);
   for (const p of list.filter(p => p !== './')) {
     assert.doesNotThrow(() => readFileSync(new URL(`../${p}`, import.meta.url)), p);
   }
+  // Offline, a module missing from the cache breaks the whole import graph.
+  const root = new URL('../public/js/', import.meta.url);
+  const modules = readdirSync(root, { recursive: true }).filter(f => f.endsWith('.js')).map(f => `./public/js/${f.replaceAll('\\', '/')}`);
+  for (const m of modules) assert.ok(list.includes(m), `${m} is precached`);
+  // …but not the optional tanpura string samples (loaded only when chosen)
+  assert.ok(!list.some(p => /tn\dstr/.test(p)));
 });

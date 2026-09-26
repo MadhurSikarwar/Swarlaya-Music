@@ -24,6 +24,7 @@ struct Job {
     std::filesystem::path zip_path;
     std::filesystem::path peaks_path;
     std::chrono::steady_clock::time_point created_at{};
+    bool two_stems = false;  // "fast" mode: vocals + no_vocals only
 
     Json::Value toJson() const;
 };
@@ -41,7 +42,7 @@ public:
         return instance_;
     }
 
-    std::string createJob();
+    std::string createJob(bool twoStems = false);
     bool updateJobStatus(const std::string& id, JobStatus status);
     bool updateJobProgress(const std::string& id, int progress);
     bool appendJobLog(const std::string& id, const std::string& logLine);

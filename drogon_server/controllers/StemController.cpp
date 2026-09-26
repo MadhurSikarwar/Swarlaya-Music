@@ -65,13 +65,24 @@ void StemController::separate(const drogon::HttpRequestPtr& req,
         return sendJsonError(400, "Unsupported file extension: " + ext, callback);
     }
 
+    // Optional form field mode=2stems: vocals + accompaniment only ("fast").
+    bool twoStems = false;
+    const auto& params = fileUpload.getParameters();
+    const auto modeIt = params.find("mode");
+    if (modeIt != params.end() && !modeIt->second.empty() && modeIt->second != "6stems") {
+        if (modeIt->second != "2stems") {
+            return sendJsonError(400, "Unknown separation mode: " + modeIt->second, callback);
+        }
+        twoStems = true;
+    }
+
     // Separations run one at a time; don't let a backlog pile up behind it.
     constexpr std::size_t kMaxActiveJobs = 4;
     if (models::JobStore::instance().activeJobCount() >= kMaxActiveJobs) {
         return sendJsonError(503, "The separator is busy right now. Please try again in a few minutes.", callback);
     }
 
-    std::string jobId = models::JobStore::instance().createJob();
+    std::string jobId = models::JobStore::instance().createJob(twoStems);
     std::filesystem::path uploadsDir = std::filesystem::current_path() / "uploads";
     std::error_code ec;
     std::filesystem::create_directories(uploadsDir, ec);
@@ -86,11 +97,12 @@ void StemController::separate(const drogon::HttpRequestPtr& req,
     out.write(fileContent.data(), static_cast<std::streamsize>(fileContent.size()));
     out.close();
 
-    services::JobWorkerPool::instance().enqueueJob(jobId, uploadPath);
+    services::JobWorkerPool::instance().enqueueJob(jobId, uploadPath, twoStems);
 
     Json::Value res;
     res["job_id"] = jobId;
     res["status"] = "queued";
+    res["mode"] = twoStems ? "2stems" : "6stems";
     auto resp = drogon::HttpResponse::newHttpJsonResponse(res);
     resp->setStatusCode(drogon::k202Accepted);
     utils::addCorsHeaders(resp);

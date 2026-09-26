@@ -25,7 +25,14 @@ import WaveSurfer from "wavesurfer.js";
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE
   || (process.env.NODE_ENV === "development" ? "http://localhost:3000" : "");
 
-const STEMS = ["vocals", "drums", "bass", "guitar", "piano", "other"] as const;
+// "Full" separates six stems; "Fast" (Demucs --two-stems vocals) only the
+// vocals and everything else, which is all the practice player needs.
+type Mode = "6stems" | "2stems";
+const STEMS_FOR: Record<Mode, string[]> = {
+  "6stems": ["vocals", "drums", "bass", "guitar", "piano", "other"],
+  "2stems": ["vocals", "no_vocals"],
+};
+const STEM_LABEL: Record<string, string> = { no_vocals: "accompaniment" };
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
@@ -35,6 +42,8 @@ export default function Home() {
   const [logs, setLogs] = useState<string[]>([]);
   const [errorMsg, setErrorMsg] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [mode, setMode] = useState<Mode>("6stems");
+  const [stems, setStems] = useState<string[]>(STEMS_FOR["6stems"]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Format file size nicely
@@ -80,6 +89,8 @@ export default function Home() {
 
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("mode", mode);
+    setStems(STEMS_FOR[mode]);
 
     try {
       const response = await fetch(`${API_BASE}/api/separate`, {
@@ -128,6 +139,9 @@ export default function Home() {
           if (res.data.logs) {
             setLogs(res.data.logs);
           }
+          if (Array.isArray(res.data.stems) && res.data.stems.length) {
+            setStems(res.data.stems);
+          }
           if (res.data.status === 'completed') {
             console.log('Separation Complete!');
           }
@@ -154,6 +168,7 @@ export default function Home() {
     setJobId(null);
     setProgress(0);
     setErrorMsg("");
+    setStems(STEMS_FOR[mode]);
   };
 
   return (
@@ -239,6 +254,25 @@ export default function Home() {
                   </div>
                 )}
 
+                <div className="mode-picker" role="radiogroup" aria-label="Separation mode">
+                  {([
+                    ["6stems", "Full · 6 stems", "Vocals, drums, bass, guitar, piano and other"],
+                    ["2stems", "Fast · 2 stems", "Vocals + accompaniment — quicker, and all you need to practise along"],
+                  ] as const).map(([value, title, sub]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={mode === value}
+                      className={`mode-option ${mode === value ? "active" : ""}`}
+                      onClick={(e) => { e.stopPropagation(); setMode(value); }}
+                    >
+                      <span className="mode-title">{title}</span>
+                      <span className="mode-sub">{sub}</span>
+                    </button>
+                  ))}
+                </div>
+
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -302,7 +336,11 @@ export default function Home() {
               </h3>
 
               <p className="text-zinc-400 font-medium mb-10 md:mb-14 text-center max-w-sm text-sm sm:text-base md:text-lg leading-relaxed">
-                {status === "processing" ? "The AI is isolating vocals, drums, bass, guitar, piano, and other instruments." : "Preparing your file for deep learning extraction."}
+                {status === "processing"
+                  ? (stems.length === 2
+                    ? "The AI is separating the vocals from the accompaniment."
+                    : "The AI is isolating vocals, drums, bass, guitar, piano, and other instruments.")
+                  : "Preparing your file for deep learning extraction."}
               </p>
 
               <div className="progress-bar-container">
@@ -349,7 +387,7 @@ export default function Home() {
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
               className="w-full max-w-5xl"
             >
-              <StemPlayer jobId={jobId} onReset={handleReset} fileName={file?.name || "audio"} />
+              <StemPlayer jobId={jobId} stems={stems} onReset={handleReset} fileName={file?.name || "audio"} />
             </motion.div>
           )}
 
@@ -380,14 +418,14 @@ export default function Home() {
 }
 
 // Separate component for the Multi-track Player
-function StemPlayer({ jobId, onReset, fileName }: { jobId: string, onReset: () => void, fileName: string }) {
+function StemPlayer({ jobId, stems, onReset, fileName }: { jobId: string, stems: string[], onReset: () => void, fileName: string }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const wsRefs = useRef<{ [key: string]: WaveSurfer | null }>({});
   const containerRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
-  const [volumes, setVolumes] = useState<{ [key: string]: number }>({ vocals: 1, drums: 1, bass: 1, guitar: 1, piano: 1, other: 1 });
-  const [mutes, setMutes] = useState<{ [key: string]: boolean }>({ vocals: false, drums: false, bass: false, guitar: false, piano: false, other: false });
-  const [solos, setSolos] = useState<{ [key: string]: boolean }>({ vocals: false, drums: false, bass: false, guitar: false, piano: false, other: false });
+  const [volumes, setVolumes] = useState<{ [key: string]: number }>(() => Object.fromEntries(stems.map(s => [s, 1])));
+  const [mutes, setMutes] = useState<{ [key: string]: boolean }>(() => Object.fromEntries(stems.map(s => [s, false])));
+  const [solos, setSolos] = useState<{ [key: string]: boolean }>(() => Object.fromEntries(stems.map(s => [s, false])));
 
   // Pre-computed waveform peaks from server — eliminates 6 parallel browser decodes
   const [peaks, setPeaks] = useState<{ [key: string]: number[] } | null>(null);
@@ -425,7 +463,7 @@ function StemPlayer({ jobId, onReset, fileName }: { jobId: string, onReset: () =
     // Wait until the peaks response arrives (even if empty) before creating instances
     if (peaksLoading) return;
 
-    STEMS.forEach(stem => {
+    stems.forEach(stem => {
       if (containerRefs.current[stem] && !wsRefs.current[stem]) {
         const stemColor: Record<string, { wave: string; progress: string }> = {
           vocals: { wave: 'rgba(245, 166, 35, 0.2)',  progress: 'rgba(245, 166, 35, 1)' },
@@ -434,6 +472,7 @@ function StemPlayer({ jobId, onReset, fileName }: { jobId: string, onReset: () =
           guitar: { wave: 'rgba(46, 204, 113, 0.2)',  progress: 'rgba(46, 204, 113, 1)' },
           piano:  { wave: 'rgba(52, 152, 219, 0.2)',  progress: 'rgba(52, 152, 219, 1)' },
           other:  { wave: 'rgba(255, 209, 102, 0.2)', progress: 'rgba(255, 209, 102, 1)' },
+          no_vocals: { wave: 'rgba(232, 87, 42, 0.2)', progress: 'rgba(232, 87, 42, 1)' },
         };
         const colors = stemColor[stem] ?? stemColor.other;
 
@@ -468,7 +507,7 @@ function StemPlayer({ jobId, onReset, fileName }: { jobId: string, onReset: () =
 
         ws.on('interaction', (newTime: number) => {
           const progress = newTime / ws.getDuration();
-          STEMS.forEach(s => {
+          stems.forEach(s => {
             if (s !== stem && wsRefs.current[s]) {
               wsRefs.current[s]!.seekTo(progress);
             }
@@ -482,7 +521,7 @@ function StemPlayer({ jobId, onReset, fileName }: { jobId: string, onReset: () =
 
     const currentWsRefs = wsRefs.current;
     return () => {
-      STEMS.forEach(stem => {
+      stems.forEach(stem => {
         if (currentWsRefs[stem]) {
           currentWsRefs[stem]!.destroy();
           currentWsRefs[stem] = null;
@@ -490,10 +529,10 @@ function StemPlayer({ jobId, onReset, fileName }: { jobId: string, onReset: () =
       });
     };
   // Re-run when peaks arrive (peaksLoading becomes false)
-  }, [jobId, peaksLoading, peaks]);
+  }, [jobId, stems, peaksLoading, peaks]);
 
   useEffect(() => {
-    STEMS.forEach(stem => {
+    stems.forEach(stem => {
       const ws = wsRefs.current[stem];
       if (ws) {
         let actualVolume = volumes[stem];
@@ -501,12 +540,12 @@ function StemPlayer({ jobId, onReset, fileName }: { jobId: string, onReset: () =
         ws.setVolume(actualVolume);
       }
     });
-  }, [volumes, mutes, solos, isSoloActive]);
+  }, [stems, volumes, mutes, solos, isSoloActive]);
 
   const togglePlay = () => {
     const newState = !isPlaying;
     setIsPlaying(newState);
-    STEMS.forEach(stem => {
+    stems.forEach(stem => {
       if (wsRefs.current[stem]) {
         if (newState) {
           wsRefs.current[stem]!.play();
@@ -545,6 +584,19 @@ function StemPlayer({ jobId, onReset, fileName }: { jobId: string, onReset: () =
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 sm:gap-4 bg-black/40 p-2 rounded-2xl border border-white/5 w-full xl:w-auto">
+          {/* Play the accompaniment on the main site's Lehra engine, at your own Sa and tempo */}
+          <a
+            href={`${API_BASE}/practice?job=${jobId}`}
+            onClick={() => {
+              // The song's name for the practice page (same origin; kept out of the URL)
+              try { sessionStorage.setItem(`practice-name-${jobId}`, fileName); } catch { /* storage unavailable */ }
+            }}
+            className="glass-button px-4 sm:px-6 py-3 sm:py-4 rounded-xl flex items-center justify-center gap-2 sm:gap-3 text-white font-semibold hover:shadow-[0_0_20px_rgba(245,166,35,0.2)] transition-shadow text-sm sm:text-base whitespace-nowrap no-underline"
+            title="Play the accompaniment at your own Sa and tempo (results are kept for an hour)"
+          >
+            <Music className="w-4 h-4 sm:w-5 sm:h-5 text-[#f5a623]" />
+            Practise along
+          </a>
           <button
             onClick={downloadZip}
             className="glass-button px-4 sm:px-6 py-3 sm:py-4 rounded-xl flex items-center justify-center gap-2 sm:gap-3 text-white font-semibold hover:shadow-[0_0_20px_rgba(245,166,35,0.2)] transition-shadow text-sm sm:text-base whitespace-nowrap"
@@ -563,7 +615,7 @@ function StemPlayer({ jobId, onReset, fileName }: { jobId: string, onReset: () =
       </div>
 
       <div className="flex flex-col gap-8 md:gap-10">
-        {STEMS.map((stem) => {
+        {stems.map((stem) => {
           const isMuted = mutes[stem] || (isSoloActive && !solos[stem]);
 
           return (
@@ -575,7 +627,7 @@ function StemPlayer({ jobId, onReset, fileName }: { jobId: string, onReset: () =
                 <div className="flex items-center justify-between pb-3 border-b border-white/5 mb-2">
                   <span className="uppercase font-semibold text-[0.85rem] tracking-[0.1em] flex items-center gap-2 font-cinzel text-[#f5a623]">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#f5a623]"></div>
-                    {stem}
+                    {STEM_LABEL[stem] || stem}
                   </span>
                   <div className="flex gap-2">
                     <button

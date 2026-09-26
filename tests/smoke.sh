@@ -29,7 +29,7 @@ expect_type() { # expect_type <path> <content-type substring>
 }
 
 echo "== website"
-for path in / /index.html /lehra /hindustani /carnatic /notation /sw.js /manifest.json /favicon.ico \
+for path in / /index.html /lehra /hindustani /carnatic /notation /practice /sw.js /manifest.json /favicon.ico \
             /public/css/style.css /public/icons/icon-192.png /separator/ \
             /assets/Metronome.aac /assets/tanpura_06_01.wav; do
   expect 200 "$path"
@@ -63,6 +63,16 @@ bad_upload=$(mktemp --suffix=.exe)
 echo "not audio" > "$bad_upload"
 expect 400 /api/separate -X POST -F "file=@$bad_upload"
 rm -f "$bad_upload"
+# Separation mode: 6stems (default) or 2stems; anything else is refused before a job exists
+bad_mode=$(mktemp --suffix=.mp3)
+echo "not audio" > "$bad_mode"
+expect 400 /api/separate -X POST -F "file=@$bad_mode" -F "mode=10stems"
+rm -f "$bad_mode"
+# Stem names are allowlisted: no_vocals.mp3 (2-stem mode) is a known stem (404: no such job), others are refused
+unknown_job=00000000-0000-4000-8000-000000000000
+expect 404 "/api/stems/$unknown_job/no_vocals.mp3"
+expect 400 "/api/stems/$unknown_job/everything.mp3"
+expect 404 "/api/job_status/$unknown_job"
 
 echo
 if [ "$failures" -eq 0 ]; then

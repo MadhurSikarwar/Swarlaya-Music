@@ -147,6 +147,13 @@ export function buildTanpuraLoop(pcm, sr, pad) {
   return padLoop(core, pad);
 }
 
+const workletModules = new WeakMap(); // AudioContext → Promise (engine.worklet.js added)
+
+/** Song mode's recorded "tempo": one beat per `length` samples at `sr`. */
+export function songBpm(length, sr) {
+  return 60 * sr / length;
+}
+
 export class LehraEngine {
   constructor(ctx) {
     this.ctx = ctx;
@@ -161,12 +168,20 @@ export class LehraEngine {
     this.bytesCache = new Map(); // url → Promise<ArrayBuffer> (compressed)
     this.raagLoads = new Map();  // raag id → Promise<id>
     this.loadedRaags = [];       // ids resident in the worklet (LRU order)
+    this.beatsOf = new Map();    // id → beats per cycle
   }
 
   async init(lehraDest, tanpuraDest) {
     if (this.node) return;
     if (!this.ctx.audioWorklet) throw new Error('This browser does not support AudioWorklet');
-    await this.ctx.audioWorklet.addModule(new URL('./engine.worklet.js', import.meta.url));
+    // Several engines (the Lehra player, song practice) share one context:
+    // the processor module is added to it once.
+    if (!workletModules.has(this.ctx)) {
+      const p = this.ctx.audioWorklet.addModule(new URL('./engine.worklet.js', import.meta.url));
+      p.catch(() => workletModules.delete(this.ctx));
+      workletModules.set(this.ctx, p);
+    }
+    await workletModules.get(this.ctx);
     const configReady = new Promise(resolve => { this._resolveConfig = resolve; });
     this.node = new AudioWorkletNode(this.ctx, 'lehra-engine', {
       numberOfInputs: 0,
@@ -249,6 +264,7 @@ export class LehraEngine {
       const transfer = [];
       for (const s of segs) transfer.push(s.buf.buffer, s.dec.buffer);
       this.node.port.postMessage({ type: 'raag', id, beats: taal.beats, tuning, segs }, transfer);
+      this.beatsOf.set(id, taal.beats);
       this.loadedRaags.push(id);
       this._evict();
       return id;
@@ -256,6 +272,33 @@ export class LehraEngine {
     this.raagLoads.set(id, p);
     p.then(() => this.raagLoads.delete(id), () => this.raagLoads.delete(id));
     return p;
+  }
+
+  /**
+   * Song mode: hand the worklet a whole track (mono `pcm` at `sr`) as one
+   * segment whose single "beat" is the track, so the musical clock reads
+   * the position in it (beat 0.5 = half-way) and the tempo is
+   * songBpm(pcm.length, sr) × speed. Replaces any song loaded under `id`.
+   */
+  loadSong(id, pcm, sr) {
+    const song = { beats: 1, tempos: [songBpm(pcm.length, sr)] };
+    const segs = buildSegments(pcm, sr, song, 0, this.config.pad, this.config.dec);
+    const transfer = [];
+    for (const s of segs) transfer.push(s.buf.buffer, s.dec.buffer);
+    this.node.port.postMessage({ type: 'raag', id, beats: 1, tuning: 1, segs }, transfer);
+    this.beatsOf.set(id, 1);
+    if (!this.loadedRaags.includes(id)) this.loadedRaags.push(id);
+    this._evict();
+    return id;
+  }
+
+  /** Let the worklet free a raag/song (after its voices have faded out). */
+  unload(id) {
+    const i = this.loadedRaags.indexOf(id);
+    if (i < 0) return;
+    this.loadedRaags.splice(i, 1);
+    this.beatsOf.delete(id);
+    this.node.port.postMessage({ type: 'drop', id });
   }
 
   _touch(id) {
@@ -292,7 +335,7 @@ export class LehraEngine {
    * clock runs from then, with negative beats until sam). Returns the
    * context time at which sam sounds.
    */
-  play(id, { bpm, pitch, tanpuraRatio, loop, delay = 0 }) {
+  play(id, { bpm, pitch, tanpuraRatio, loop, delay = 0, startPhase = 0 }) {
     const sr = this.ctx.sampleRate;
     // A little lead time so the message reaches the audio thread first.
     const when = this.ctx.currentTime + 0.04 + Math.max(0, delay);
@@ -300,13 +343,22 @@ export class LehraEngine {
     this.session++;
     this.seq++;
     this.playing = true;
-    this.anchor = { frame: startFrame, beat: 0, bpf: bpm / 60 / sr };
+    const beats = this.beatsOf.get(id) || 1;
+    this.anchor = { frame: startFrame, beat: startPhase * beats, bpf: bpm / 60 / sr };
     this._touch(id);
     this.node.port.postMessage({
       type: 'play', id, session: this.session, seq: this.seq, startFrame,
-      bpm, pitch, tanpuraRatio, loop
+      bpm, pitch, tanpuraRatio, loop, startPhase
     });
     return when;
+  }
+
+  /** Jump to `phase` (0–1) of the current cycle (song mode: position in the track). */
+  seek(phase) {
+    if (!this.node) return;
+    this.seq++;
+    this.anchor = null; // until the engine reports the new position
+    this.node.port.postMessage({ type: 'seek', phase, seq: this.seq });
   }
 
   setParams(params) {

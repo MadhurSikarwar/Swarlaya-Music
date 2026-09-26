@@ -132,11 +132,19 @@ function fadeOut(v) {
 }
 
 let request = 0;
+let active = false; // on from the request, even while the tanpura loads
 
 /** Start the drone, or crossfade to new settings { sound, sa, first, pace }. */
 export async function startShruti(opts) {
   const id = ++request;
-  const v = opts.sound === 'reed' ? reedVoice(opts) : await tanpuraVoice(opts);
+  active = true;
+  let v;
+  try {
+    v = opts.sound === 'reed' ? reedVoice(opts) : await tanpuraVoice(opts);
+  } catch (err) {
+    if (id === request) active = false;
+    throw err;
+  }
   if (id !== request) { fadeOut(v); return; } // superseded while loading
   if (voice) fadeOut(voice);
   voice = v;
@@ -148,10 +156,11 @@ export function setShrutiSa(hz) {
 
 export function stopShruti() {
   request++;
+  active = false;
   if (voice) fadeOut(voice);
   voice = null;
 }
 
 export function shrutiPlaying() {
-  return !!voice;
+  return active;
 }

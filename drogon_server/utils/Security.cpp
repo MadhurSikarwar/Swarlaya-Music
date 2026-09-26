@@ -5,8 +5,9 @@
 namespace lehra::utils {
 
 const std::set<std::string> ALLOWED_STEMS = {
-    "vocals.mp3", "drums.mp3", "bass.mp3", 
-    "guitar.mp3", "piano.mp3", "other.mp3"
+    "vocals.mp3", "drums.mp3", "bass.mp3",
+    "guitar.mp3", "piano.mp3", "other.mp3",
+    "no_vocals.mp3"  // fast (2-stem) mode
 };
 
 bool isValidJobId(const std::string& id) {

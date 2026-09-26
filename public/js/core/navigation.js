@@ -9,6 +9,7 @@ const VIEW_PATHS = {
   'view-hindustani': '/hindustani',
   'view-lehra': '/lehra',
   'view-notation': '/notation',
+  'view-practice': '/practice',
 };
 
 const PATH_VIEWS = {
@@ -16,6 +17,7 @@ const PATH_VIEWS = {
   hindustani: ['view-hindustani', 'hindustani'],
   lehra: ['view-lehra', 'hindustani'],
   notation: ['view-notation', 'hindustani'],
+  practice: ['view-practice', 'stem'],
 };
 
 const leaveHooks = [];
@@ -67,7 +69,10 @@ export function initNavigation() {
     navigateTo(target, domain);
     window.history.replaceState({ target, domain }, '', VIEW_PATHS[target]);
   } else if (PATH_VIEWS[path]) {
-    navigateTo(...PATH_VIEWS[path]);
+    const [target, domain] = PATH_VIEWS[path];
+    navigateTo(target, domain);
+    // So Back returns to this page (query included, e.g. /practice?job=…)
+    window.history.replaceState({ target, domain }, '', window.location.href);
   }
 
   // Dashboard cards dispatch 'nav-internal' (see index.html)

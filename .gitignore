@@ -7,20 +7,52 @@ separated/
 test_demucs/
 test_output.txt
 *.log
+
+# C++ / Drogon / CMake build outputs
+build/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+*.o
+*.obj
+*.exe
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
+drogon_server/build/
+bin/
+
+# Next.js & Frontend
 stem-frontend/node_modules/
 stem-frontend/.next/
 stem-frontend/out/
-.DS_Store
-Thumbs.db
+
+# Root dev tools (eslint)
+node_modules/
+.eslintcache
 
 # Demucs outputs
 out/
 
 # Environment and Virtualenvs
 .env
+.env*.local
 .venv/
 venv/
 env/
 
-# Root dev tools (eslint)
-node_modules/
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*~
+*.bak
+
+# OS metadata
+.DS_Store
+Thumbs.db
+desktop.ini

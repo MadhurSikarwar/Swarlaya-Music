@@ -17,6 +17,15 @@ Json::Value Job::toJson() const {
     }
     val["progress"] = progress;
     val["error"] = error.empty() ? "" : error;
+    val["mode"] = two_stems ? "2stems" : "6stems";
+
+    Json::Value stems(Json::arrayValue);
+    if (two_stems) {
+        for (const char* s : {"vocals", "no_vocals"}) stems.append(Json::Value(s));
+    } else {
+        for (const char* s : {"vocals", "drums", "bass", "guitar", "piano", "other"}) stems.append(Json::Value(s));
+    }
+    val["stems"] = stems;
 
     Json::Value logsArray(Json::arrayValue);
     for (const auto& l : logs) {
@@ -26,7 +35,7 @@ Json::Value Job::toJson() const {
     return val;
 }
 
-std::string JobStore::createJob() {
+std::string JobStore::createJob(bool twoStems) {
     static thread_local std::mt19937_64 rng(std::random_device{}());
     static thread_local std::uniform_int_distribution<uint64_t> dist;
     uint64_t h1 = dist(rng);
@@ -49,6 +58,7 @@ std::string JobStore::createJob() {
     job.status = JobStatus::Queued;
     job.progress = 0;
     job.created_at = std::chrono::steady_clock::now();
+    job.two_stems = twoStems;
     jobs_[id] = std::move(job);
     return id;
 }

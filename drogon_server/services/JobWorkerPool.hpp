@@ -29,7 +29,8 @@ public:
 
     void start(size_t numWorkers = 2);
     void stop();
-    void enqueueJob(const std::string& jobId, const std::filesystem::path& inputPath);
+    /// twoStems: "fast" mode, vocals + no_vocals (Demucs --two-stems vocals).
+    void enqueueJob(const std::string& jobId, const std::filesystem::path& inputPath, bool twoStems = false);
 
     /// Delete uploads/results older than maxAge and forget their finished jobs.
     void sweepExpired(std::chrono::seconds maxAge);
@@ -40,11 +41,17 @@ private:
     JobWorkerPool(const JobWorkerPool&) = delete;
     JobWorkerPool& operator=(const JobWorkerPool&) = delete;
 
+    struct Task {
+        std::string jobId;
+        std::filesystem::path inputPath;
+        bool twoStems = false;
+    };
+
     void workerLoop();
-    void processJob(const std::string& jobId, const std::filesystem::path& inputPath);
+    void processJob(const Task& task);
 
     std::vector<std::thread> workers_;
-    std::deque<std::pair<std::string, std::filesystem::path>> queue_;
+    std::deque<Task> queue_;
     std::mutex queueMutex_;
     std::condition_variable cv_;
     std::atomic<bool> running_{false};
