@@ -156,26 +156,25 @@ sequenceDiagram
 
 ## ⚡ Quick Start
 
-### 1. Launch with Docker (Recommended)
-```bash
-# Clone the repository
-git clone https://github.com/MadhurSikarwar/Swarlaya-Music.git
-cd Swarlaya-Music/webapp
+> [!TIP]
+> **On Windows, just double-click [`start_website.bat`](start_website.bat).** It uses Docker Desktop when it's running (the full site), otherwise the local server below, and opens your browser as soon as the site is up. If the site is already running it simply opens the browser.
 
-# Build and run the Drogon C++ container
+### 1. Full site with Docker (recommended)
+Everything, including the AI Stem Separator. Needs [Docker Desktop](https://www.docker.com/products/docker-desktop/) running.
+```bash
+git clone https://github.com/MadhurSikarwar/Swarlaya-Music.git
+cd Swarlaya-Music
 docker compose up --build
 ```
-Navigate to **`http://localhost:3000`** in your browser.
+Open **`http://localhost:3000`**. The first build compiles the C++ server and takes a while; later starts are quick. Stop it with Ctrl+C (or `docker compose down`).
 
-> [!TIP]
-> On Windows, you can double-click **[`start_website.bat`](file:///c:/Users/Madhu/OneDrive/Desktop/Projects/LehraStudio/start_website.bat)** in the root folder to automatically verify Docker, build the container, and launch your default browser when healthy.
-
-### 2. Standalone Frontend Preview (No Docker)
-If you only need the Lehra player, Tuner, Notation editor, and Carnatic suite without the AI separator:
+### 2. Without Docker (local server)
+The Lehra player, Tuner, Notation Editor and Carnatic suite — everything except the Stem Separator — with just Python 3.8+:
 ```bash
-python -m http.server 3000
+cd Swarlaya-Music
+python tools/dev_server.py
 ```
-Open **`http://localhost:3000`**.
+Open **`http://localhost:3000`** (pass another port if 3000 is taken: `python tools/dev_server.py 3001`). It serves the site exactly like the real server — `/lehra`, `/notation`, `/practice` links work, and edited files reload fresh — and answers the separator's API with a message pointing to Docker.
 
 ---
 
