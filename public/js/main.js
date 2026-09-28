@@ -2,7 +2,7 @@
  * Swaralaya — entry point (loaded as an ES module by index.html).
  *
  *   core/       shared helpers: DOM, the one AudioContext and its output,
- *               media session, microphone, view routing
+ *               media session, microphone, view routing, modals
  *   lehra/      Lehra player (real-time engine, controls, metronome, riyaz)
  *   notation/   Notation Editor
  *   carnatic/   Carnatic suite (shruti box, talam metronome)
@@ -10,6 +10,7 @@
  *   tuner/      swar tuner (microphone pitch detection)
  */
 import { carnaticSa, initCarnatic, stopAll as stopCarnatic } from './carnatic/index.js';
+import { initModals } from './core/modals.js';
 import { initNavigation, onLeaveView } from './core/navigation.js';
 import { initLehra, leaveLehra } from './lehra/index.js';
 import { state as lehraState } from './lehra/state.js';
@@ -28,6 +29,7 @@ const lehraSa = () => ({ sa: lehraState.pitchHz, system: 'hindustani' });
 registerTunerReference('view-carnatic', () => ({ sa: carnaticSa(), system: 'carnatic' }));
 registerTunerReference('view-practice', () => ({ sa: practiceSa(), system: 'hindustani' }));
 initTuner();
+initModals();
 
 // Nothing keeps playing on a page you've left.
 onLeaveView(leaveLehra);

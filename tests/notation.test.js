@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { decodeShare, deserialize, encodeShare, serialize, shareFromHash, upsertEntry } from '../public/js/notation/library.js';
 import { bolStrokes, drumPitches } from '../public/js/notation/synth.js';
-import { swarFrequency } from '../public/js/notation/notation.js';
+import { matrasPerLine, swarFrequency } from '../public/js/notation/notation.js';
 
 const TAALS = { 16: 16, 7: 7, '14_deep': 14 };
 const cell = (content, modifier = null) => ({ content, modifier });
@@ -93,4 +93,14 @@ test('sung swaras: just ratios, komal/tivra, saptak, lyrics silent', () => {
   assert.ok(near(swarFrequency('नि', null, sa), sa * 15 / 8));
   assert.equal(swarFrequency('Jaa', null, sa), null);
   assert.equal(swarFrequency('Pyaare', null, sa), null);
+});
+
+test('narrow screens wrap a notation line at vibhag boundaries, evenly', () => {
+  assert.equal(matrasPerLine([4, 4, 4, 4], 20), 16, 'fits: one line');
+  assert.equal(matrasPerLine([4, 4, 4, 4], 14), 8, 'Teentaal: 8 + 8, not 12 + 4');
+  assert.equal(matrasPerLine([4, 4, 4, 4], 6), 4);
+  assert.equal(matrasPerLine([2, 3, 2, 3], 7), 5, 'Jhaptaal: 2+3 | 2+3');
+  assert.equal(matrasPerLine([5, 2, 3, 4], 8), 7, 'Dhamar: 5+2 | 3+4');
+  assert.equal(matrasPerLine([3, 2, 2], 5), 4, 'Rupak: 3 | 2+2');
+  assert.equal(matrasPerLine([4, 4, 4, 4], 3), 4, 'a vibhag is never split');
 });

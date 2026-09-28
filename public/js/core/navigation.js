@@ -1,6 +1,10 @@
 /**
  * Client-side routing between the site's views. The server sends index.html
  * for each of these paths (see StaticController).
+ *
+ * Links with a data-target (the header, the dashboard cards) are real links
+ * to these paths, so they also work in a new tab; a plain click switches the
+ * view here instead of reloading the page.
  */
 
 const VIEW_PATHS = {
@@ -33,31 +37,36 @@ export function navigateTo(target, domain) {
   // Hide all views
   document.querySelectorAll('.app-view').forEach(v => {
     v.style.display = 'none';
-    v.classList.remove('active-view');
+    v.classList.remove('active-view', 'entering');
   });
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-
-  // The Scale / pitch controls in the header belong to the Lehra player
-  const pitchWrap = document.querySelector('.pitch-wrap');
-  if (pitchWrap) pitchWrap.style.display = target === 'view-lehra' ? 'flex' : 'none';
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    b.classList.remove('active');
+    b.removeAttribute('aria-current');
+  });
 
   const view = document.getElementById(target);
   if (view) {
     view.style.display = '';
     view.classList.add('active-view');
+    void view.offsetWidth; // restart the entrance animation
+    view.classList.add('entering');
   }
 
   // If no domain provided, try to infer it from the target view
   if (!domain && view) domain = view.getAttribute('data-domain');
   if (domain) {
     const navBtn = document.querySelector(`.nav-btn[data-domain="${domain}"]`);
-    if (navBtn) navBtn.classList.add('active');
+    if (navBtn) {
+      navBtn.classList.add('active');
+      navBtn.setAttribute('aria-current', 'page');
+    }
   }
 }
 
 function go(target, domain) {
   navigateTo(target, domain);
   window.history.pushState({ target, domain }, '', VIEW_PATHS[target] || '/');
+  window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
 export function initNavigation() {
@@ -75,18 +84,20 @@ export function initNavigation() {
     window.history.replaceState({ target, domain }, '', window.location.href);
   }
 
-  // Dashboard cards dispatch 'nav-internal' (see index.html)
+  // Composition links dispatch 'nav-internal' (see notation.js)
   document.addEventListener('nav-internal', e => {
     if (e.detail && e.detail.target) go(e.detail.target, e.detail.domain);
   });
 
-  document.querySelectorAll('.nav-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      const target = e.currentTarget.getAttribute('data-target');
-      if (!target) return;
-      e.preventDefault();
-      go(target, e.currentTarget.getAttribute('data-domain'));
-    });
+  // Header links, the logo and the dashboard cards. Modified clicks (new tab,
+  // new window) are left to the browser.
+  document.addEventListener('click', e => {
+    const link = e.target.closest('[data-target]');
+    if (!link || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const target = link.getAttribute('data-target');
+    if (!document.getElementById(target)) return;
+    e.preventDefault();
+    go(target, link.getAttribute('data-domain'));
   });
 
   // Browser Back/Forward

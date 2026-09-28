@@ -22,6 +22,7 @@ const ASSETS = [
   './public/js/core/audio-output.js',
   './public/js/core/dom.js',
   './public/js/core/mic.js',
+  './public/js/core/modals.js',
   './public/js/core/media-session.js',
   './public/js/core/navigation.js',
   './public/js/lehra/audio.js',

@@ -1,42 +1,21 @@
 @import "tailwindcss";
 
 /* ============================================================
-   SWARALAYA STEM SEPARATOR — Premium Design System
-   Refined Dark Theme with Warm Golden/Orange Accents
+   SWARALAYA STEM SEPARATOR — page components
+   The site-wide design (colours, header, hero titles, buttons, the reset)
+   comes from the main site's /public/css/style.css, loaded in layout.tsx,
+   so this page looks like the rest of Swaralaya. Only components that exist
+   just on this page are styled here.
    ============================================================ */
 
-:root {
-  --background: #090806;
-  --foreground: #ede0cc;
-  --gold: #f5a623;
-  --gold-dark: #c47d0e;
-  --gold-light: #ffd166;
-  --orange: #e8572a;
-  --bg-deep: #090806;
-  --bg-card: rgba(255, 255, 255, 0.035);
-  --bg-hover: rgba(255, 255, 255, 0.065);
-  --bg-active: rgba(245, 166, 35, 0.14);
-  --border: rgba(255, 255, 255, 0.07);
-  --border-gold: rgba(245, 166, 35, 0.32);
-  --text-primary: #ede0cc;
-  --text-sub: #7a6b56;
-  --text-muted: #3a3028;
-  --glass-bg: rgba(245, 166, 35, 0.03);
-  --glass-border: rgba(245, 166, 35, 0.1);
-  --primary: #f5a623;
-  --primary-hover: #c47d0e;
-  --radius: 18px;
-  --radius-sm: 11px;
-  --shadow-gold: 0 0 50px rgba(245, 166, 35, 0.12);
-}
-
+/* Tailwind colour names for the shared design tokens (text-ink, text-sub, …) */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-primary: var(--primary);
-  --color-primary-hover: var(--primary-hover);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-ink: var(--text-primary);
+  --color-sub: var(--text-sub);
+  --color-muted: var(--text-muted);
+  --color-gold: var(--gold);
+  --font-sans: 'Outfit', 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
 
   --animate-float: float 6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   --animate-pulse-slow: pulse-slow 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
@@ -74,52 +53,8 @@
   50% { transform: scale(1.15); opacity: 0.05; }
 }
 
-/* ── Base & Ambient Background ── */
-body {
-  background-color: var(--background);
-  color: var(--foreground);
-  background-image:
-    radial-gradient(circle at 15% 10%, rgba(245, 166, 35, 0.055) 0px, transparent 45%),
-    radial-gradient(circle at 85% 85%, rgba(232, 87, 42, 0.05) 0px, transparent 45%),
-    radial-gradient(circle at 50% 50%, transparent 40%, rgba(0, 0, 0, 0.75) 100%),
-    url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.02'/%3E%3C/svg%3E");
-  background-attachment: fixed;
-  font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  min-height: 100vh;
-  position: relative;
-  overflow-x: hidden;
-  -webkit-font-smoothing: antialiased;
-}
-
 .font-cinzel {
   font-family: 'Cinzel', serif;
-}
-
-/* ── Premium Hero Section ── */
-.hero-title {
-  font-family: 'Cinzel', serif;
-  font-size: clamp(2.5rem, 6.5vw + 0.75rem, 5.25rem) !important;
-  line-height: 1.05 !important;
-  letter-spacing: -0.035em !important;
-  font-weight: 700;
-  text-transform: uppercase;
-  background: linear-gradient(180deg, #ffffff 0%, #fdf5e6 55%, rgba(245, 166, 35, 0.9) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 4px 30px rgba(245, 166, 35, 0.25)) drop-shadow(0 10px 20px rgba(0, 0, 0, 0.7));
-  margin-bottom: 1.5rem;
-  padding: 0 0.5rem;
-}
-
-.hero-subtitle {
-  font-size: clamp(1rem, 1.8vw, 1.25rem);
-  line-height: 1.65;
-  color: rgba(237, 224, 204, 0.72) !important;
-  font-weight: 300;
-  letter-spacing: 0.01em;
-  max-width: 620px !important;
-  margin: 0 auto;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
 }
 
 .ai-glass-pill {
@@ -172,7 +107,7 @@ body {
   backdrop-filter: blur(32px) !important;
   -webkit-backdrop-filter: blur(32px) !important;
   border: 1px solid rgba(255, 255, 255, 0.07) !important;
-  border-radius: clamp(1.75rem, 3.5vw, 2.75rem) !important;
+  border-radius: var(--radius-lg) !important;
   box-shadow: 
     0 30px 100px -15px rgba(0, 0, 0, 0.75),
     0 15px 35px -5px rgba(245, 166, 35, 0.08),
@@ -288,23 +223,24 @@ body {
 }
 
 .upload-title {
-  font-size: clamp(1.5rem, 3vw, 2.25rem) !important;
+  font-family: 'Cinzel', serif;
+  font-size: clamp(1.35rem, 3vw, 1.9rem) !important;
   font-weight: 700 !important;
-  color: #ffffff !important;
-  letter-spacing: -0.025em !important;
+  color: var(--text-primary) !important;
+  letter-spacing: 0.01em !important;
   margin-bottom: 0.75rem !important;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
   transition: color 0.3s ease;
 }
 
 .upload-drop-zone:hover .upload-title {
-  color: #fdfaf5 !important;
+  color: var(--gold-light) !important;
 }
 
 .upload-subtitle {
   font-size: clamp(0.875rem, 1.5vw, 1.05rem) !important;
   font-weight: 400 !important;
-  color: rgba(237, 224, 204, 0.65) !important;
+  color: var(--text-sub) !important;
   letter-spacing: 0.015em !important;
 }
 
@@ -427,37 +363,7 @@ body {
   box-shadow: 0 8px 25px rgba(245, 166, 35, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
 }
 
-.header-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  color: #7a6b56;
-  border-radius: 8px;
-  padding: 6px 12px;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  font-family: inherit;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-}
-
-.header-icon-btn:hover {
-  background: rgba(245, 166, 35, 0.12);
-  color: #f5a623;
-  border-color: rgba(245, 166, 35, 0.4);
-  transform: translateY(-1px);
-}
-
-.header-icon-btn.active {
-  background: rgba(245, 166, 35, 0.18);
-  color: #f5a623;
-  border-color: rgba(245, 166, 35, 0.5);
-  box-shadow: 0 0 15px rgba(245, 166, 35, 0.2);
-}
-
+/* .header-icon-btn itself (and its .active state) comes from style.css */
 .header-icon-btn.active-red {
   background: rgba(239, 68, 68, 0.18);
   color: #ef4444;

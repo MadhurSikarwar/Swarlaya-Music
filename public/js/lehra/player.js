@@ -257,7 +257,7 @@ export function stopPlayback() {
   releaseWakeLock();
   $('infoDot').className = 'info-dot';
   setStatus('Stopped', '');
-  setBadge('Web Player', false);
+  setBadge('Ready', false);
   updateMatraDisplay(0, state.taalData?.beats || 0);
   clearMediaSession(MEDIA_ACTIONS);
   stopMediaOutput();

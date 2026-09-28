@@ -180,24 +180,19 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 sm:p-8 md:p-12 relative">
-
-      {/* Background Floating Orbs */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#f5a623]/10 rounded-full blur-[120px] pointer-events-none animate-pulse-slow"></div>
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-[#e8572a]/10 rounded-full blur-[120px] pointer-events-none animate-float"></div>
-
-      <div className="z-10 w-full max-w-5xl flex flex-col items-center pt-24 pb-16">
-        {/* Premium Hero Section */}
+    // The same page shell and hero as the main site's views (style.css)
+    <div className="app-container">
+      <div className="w-full max-w-5xl mx-auto flex flex-col items-center">
         <motion.div
           initial={{ y: -30, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-          className="text-center mb-24 relative flex flex-col items-center"
+          className="hero-section"
         >
           <h1 className="hero-title">
-            AI Stem Separator
+            AI Stem <span className="text-gradient">Separator</span>
           </h1>
-          <p className="hero-subtitle px-4">
+          <p className="hero-subtitle">
             Extract studio-quality vocals, drums, bass, guitar, piano, and other instruments from any audio file instantly. Powered by state-of-the-art Hybrid Demucs deep learning.
           </p>
         </motion.div>
@@ -213,16 +208,16 @@ export default function Home() {
               className="w-full max-w-2xl flex flex-col items-center"
             >
               {serverAvailable === false && (
-                <div className="glass-panel w-full flex flex-col items-center text-center gap-4 p-8 sm:p-12">
-                  <Layers className="w-10 h-10 text-[#f5a623]" />
-                  <h3 className="text-xl sm:text-2xl font-semibold text-white">Not available on this site</h3>
-                  <p className="text-zinc-400 max-w-md leading-relaxed">
+                <div className="glass-panel w-full flex flex-col items-center text-center gap-4 p-6 sm:p-10">
+                  <Layers className="w-10 h-10 text-gold" />
+                  <h3 className="font-cinzel text-xl sm:text-2xl font-bold text-ink">Not available on this site</h3>
+                  <p className="text-sub max-w-md leading-relaxed">
                     Separating songs needs an AI server (Demucs), which this deployment doesn&apos;t run.
                     Everything else — the Lehra player, tuner, notation editor and Carnatic suite — works here.
                     To separate songs, run the full site on your own computer with Docker (see the README).
                   </p>
                   {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- the main site, outside this app's /separator basePath */}
-                  <a href="/" className="glass-button px-6 py-3 rounded-xl text-white font-semibold no-underline">
+                  <a href="/" className="glass-button no-underline">
                     Back to Swaralaya
                   </a>
                 </div>
@@ -230,7 +225,7 @@ export default function Home() {
 
               {/* Premium Glass Upload Card */}
               <div
-                className="glass-panel w-full flex flex-col items-center relative group p-8 sm:p-12 md:p-20"
+                className="glass-panel w-full flex flex-col items-center relative group p-5 sm:p-8 md:p-10"
                 style={{ display: serverAvailable === false ? "none" : undefined }}
               >
 
@@ -253,27 +248,27 @@ export default function Home() {
                     {/* Selected File State */}
                     <div
                       onClick={() => fileInputRef.current?.click()}
-                      className="file-selected-card w-full flex items-center gap-6 p-6 rounded-2xl cursor-pointer mb-10"
+                      className="file-selected-card w-full flex items-center gap-4 sm:gap-6 p-4 sm:p-6 rounded-2xl cursor-pointer mb-8"
                     >
-                      <div className="w-16 h-16 bg-gradient-to-br from-[#f5a623]/10 to-[#e8572a]/10 rounded-xl flex items-center justify-center border border-[#f5a623]/20 shrink-0">
-                        <Music className="w-8 h-8 text-[#f5a623]" />
+                      <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-[#f5a623]/10 to-[#e8572a]/10 rounded-xl flex items-center justify-center border border-[#f5a623]/20 shrink-0">
+                        <Music className="w-6 h-6 sm:w-8 sm:h-8 text-gold" />
                       </div>
                       <div className="flex-1 min-w-0 flex flex-col justify-center">
-                        <p className="text-white font-medium truncate text-lg mb-1">{file.name}</p>
-                        <p className="text-zinc-500 text-sm flex items-center gap-3">
+                        <p className="text-ink font-medium truncate text-base sm:text-lg mb-1">{file.name}</p>
+                        <p className="text-sub text-sm flex items-center flex-wrap gap-x-3 gap-y-1">
                           <span>{formatBytes(file.size)}</span>
-                          <span className="w-1 h-1 bg-zinc-700 rounded-full"></span>
-                          <span className="text-[#f5a623]">Ready to process</span>
+                          <span className="w-1 h-1 bg-muted rounded-full"></span>
+                          <span className="text-gold">Ready to process</span>
                         </p>
                       </div>
-                      <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors shrink-0">
-                        <Activity className="w-5 h-5 text-zinc-400" />
+                      <div className="hidden sm:flex w-12 h-12 rounded-full bg-white/5 items-center justify-center hover:bg-white/10 transition-colors shrink-0">
+                        <Activity className="w-5 h-5 text-sub" />
                       </div>
                     </div>
 
                     <button
                       onClick={startSeparation}
-                      className="primary-glow-btn flex items-center justify-center gap-3"
+                      className="primary-glow-btn w-full sm:w-auto flex items-center justify-center gap-3"
                     >
                       <Zap className="w-5 h-5 fill-black" />
                       <span>Separate Stems Now</span>
@@ -310,17 +305,17 @@ export default function Home() {
               </div>
 
               {/* Trust Badges */}
-              <div className="mt-12 flex items-center justify-center gap-6 flex-wrap">
+              <div className="mt-8 flex items-center justify-center gap-3 sm:gap-4 flex-wrap">
                 <div className="feature-pill">
-                  <Zap className="w-3.5 h-3.5 text-[#f5a623]" />
+                  <Zap className="w-3.5 h-3.5 text-gold" />
                   <span>Hybrid Demucs Engine</span>
                 </div>
                 <div className="feature-pill">
-                  <Layers className="w-3.5 h-3.5 text-[#f5a623]" />
+                  <Layers className="w-3.5 h-3.5 text-gold" />
                   <span>6-Stem Extraction</span>
                 </div>
                 <div className="feature-pill">
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#f5a623]" />
+                  <ShieldCheck className="w-3.5 h-3.5 text-gold" />
                   <span>Lossless Export</span>
                 </div>
               </div>
@@ -344,25 +339,25 @@ export default function Home() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95, filter: "blur(10px)" }}
               transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full max-w-xl glass-panel rounded-[2rem] md:rounded-[2.5rem] p-8 sm:p-12 md:p-16 flex flex-col items-center justify-center relative"
+              className="w-full max-w-xl glass-panel p-6 sm:p-10 flex flex-col items-center justify-center relative"
             >
               <div className="absolute inset-0 bg-gradient-to-b from-[#f5a623]/10 to-transparent animate-pulse-slow" />
 
               <div className="relative mb-8">
                 <div className="w-24 h-24 bg-[#f5a623]/20 rounded-full flex items-center justify-center animate-pulse">
-                  <Loader2 className="w-10 h-10 text-[#f5a623] animate-spin" />
+                  <Loader2 className="w-10 h-10 text-gold animate-spin" />
                 </div>
                 {/* Simulated equalizer rings */}
                 <div className="absolute inset-0 border border-[#f5a623]/30 rounded-full animate-ping" style={{ animationDuration: '3s' }}></div>
               </div>
 
-              <h3 className="text-2xl sm:text-3xl md:text-4xl font-semibold text-white mb-4 md:mb-6 text-center">
+              <h3 className="font-cinzel text-2xl sm:text-3xl font-bold text-ink mb-3 md:mb-4 text-center">
                 {status === "uploading" ? "Uploading Audio..." :
                  status === "queued" ? "Waiting in Queue..." :
                  "Analyzing Frequencies"}
               </h3>
 
-              <p className="text-zinc-400 font-medium mb-10 md:mb-14 text-center max-w-sm text-sm sm:text-base md:text-lg leading-relaxed">
+              <p className="text-sub font-medium mb-8 md:mb-10 text-center max-w-sm text-sm sm:text-base leading-relaxed">
                 {status === "processing"
                   ? (stems.length === 2
                     ? "The AI is separating the vocals from the accompaniment."
@@ -381,9 +376,9 @@ export default function Home() {
                   <div className="absolute top-0 bottom-0 left-0 right-0 bg-gradient-to-b from-white/30 to-transparent"></div>
                 </motion.div>
               </div>
-              <div className="flex justify-between w-full px-2 mb-8">
-                <span className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Processing</span>
-                <span className="text-xs text-[#f5a623] font-bold">{progress}%</span>
+              <div className="flex justify-between w-full px-2 mt-2 mb-8">
+                <span className="text-xs text-sub font-medium uppercase tracking-wider">Processing</span>
+                <span className="text-xs text-gold font-bold">{progress}%</span>
               </div>
 
               {/* Live Terminal Output */}
@@ -423,16 +418,16 @@ export default function Home() {
               key="error"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="w-full max-w-xl glass-panel rounded-[2rem] p-12 text-center"
+              className="w-full max-w-xl glass-panel p-6 sm:p-10 text-center"
             >
               <div className="w-24 h-24 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center mx-auto mb-8 shadow-[0_0_30px_rgba(239,68,68,0.2)]">
                 <FileAudio className="w-12 h-12 text-red-500" />
               </div>
-              <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4">Processing Failed</h3>
+              <h3 className="font-cinzel text-2xl sm:text-3xl font-bold text-ink mb-4">Processing Failed</h3>
               <p className="text-red-400/90 mb-8 md:mb-10 bg-red-500/5 p-4 rounded-xl border border-red-500/10 text-sm md:text-base">{errorMsg}</p>
               <button
                 onClick={handleReset}
-                className="bg-white/10 hover:bg-white/15 border border-white/20 text-white px-8 py-4 rounded-xl font-semibold transition-all hover:-translate-y-1 shadow-lg"
+                className="glass-button"
               >
                 Try Again
               </button>
@@ -592,8 +587,8 @@ function StemPlayer({ jobId, stems, onReset, fileName }: { jobId: string, stems:
   const handleVolume = (stem: string, val: number) => setVolumes(p => ({ ...p, [stem]: val }));
 
   return (
-    <div className="glass-panel rounded-[2rem] md:rounded-[2.5rem] p-6 sm:p-10 md:p-16 w-full mt-6 md:mt-10">
-      <div className="flex flex-col xl:flex-row items-center justify-between mb-10 md:mb-16 pb-8 md:pb-10 border-b border-white/10 gap-8">
+    <div className="glass-panel p-5 sm:p-8 md:p-10 w-full">
+      <div className="flex flex-col xl:flex-row items-center justify-between mb-8 pb-6 md:pb-8 border-b border-white/10 gap-6">
         <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 w-full xl:w-auto text-center sm:text-left">
           <button
             onClick={togglePlay}
@@ -602,9 +597,9 @@ function StemPlayer({ jobId, stems, onReset, fileName }: { jobId: string, stems:
             {isPlaying ? <Pause className="w-8 h-8 sm:w-10 sm:h-10 fill-black" /> : <Play className="w-8 h-8 sm:w-10 sm:h-10 ml-2 fill-black" />}
           </button>
           <div className="flex flex-col items-center sm:items-start w-full">
-            <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight mb-2">Extraction Complete</h2>
-            <div className="flex items-center justify-center sm:justify-start gap-3 text-zinc-400 bg-black/30 px-3 sm:px-4 py-2 rounded-lg border border-white/5 w-full sm:w-fit max-w-full">
-              <FileAudio className="w-4 h-4 shrink-0 text-[#f5a623]" />
+            <h2 className="font-cinzel text-2xl sm:text-3xl font-bold text-ink mb-2">Extraction Complete</h2>
+            <div className="flex items-center justify-center sm:justify-start gap-3 text-sub bg-black/30 px-3 sm:px-4 py-2 rounded-lg border border-white/5 w-full sm:w-fit max-w-full">
+              <FileAudio className="w-4 h-4 shrink-0 text-gold" />
               <span className="truncate max-w-[180px] sm:max-w-[200px] md:max-w-xs text-xs sm:text-sm">{fileName}</span>
             </div>
           </div>
@@ -618,41 +613,41 @@ function StemPlayer({ jobId, stems, onReset, fileName }: { jobId: string, stems:
               // The song's name for the practice page (same origin; kept out of the URL)
               try { sessionStorage.setItem(`practice-name-${jobId}`, fileName); } catch { /* storage unavailable */ }
             }}
-            className="glass-button px-4 sm:px-6 py-3 sm:py-4 rounded-xl flex items-center justify-center gap-2 sm:gap-3 text-white font-semibold hover:shadow-[0_0_20px_rgba(245,166,35,0.2)] transition-shadow text-sm sm:text-base whitespace-nowrap no-underline"
+            className="glass-button flex items-center justify-center gap-2 sm:gap-3 text-sm sm:text-base whitespace-nowrap no-underline"
             title="Play the accompaniment at your own Sa and tempo (results are kept for an hour)"
           >
-            <Music className="w-4 h-4 sm:w-5 sm:h-5 text-[#f5a623]" />
+            <Music className="w-4 h-4 sm:w-5 sm:h-5 text-gold" />
             Practise along
           </a>
           <button
             onClick={downloadZip}
-            className="glass-button px-4 sm:px-6 py-3 sm:py-4 rounded-xl flex items-center justify-center gap-2 sm:gap-3 text-white font-semibold hover:shadow-[0_0_20px_rgba(245,166,35,0.2)] transition-shadow text-sm sm:text-base whitespace-nowrap"
+            className="glass-button flex items-center justify-center gap-2 sm:gap-3 text-sm sm:text-base whitespace-nowrap"
           >
-            <Download className="w-4 h-4 sm:w-5 sm:h-5 text-[#f5a623]" />
+            <Download className="w-4 h-4 sm:w-5 sm:h-5 text-gold" />
             Download ZIP
           </button>
           <div className="hidden sm:block w-px h-8 sm:h-10 bg-white/10"></div>
           <button
             onClick={onReset}
-            className="px-4 sm:px-6 py-3 sm:py-4 rounded-xl text-zinc-400 hover:text-white font-medium transition-colors text-sm sm:text-base whitespace-nowrap"
+            className="px-4 sm:px-6 py-3 rounded-xl text-sub hover:text-ink font-medium transition-colors text-sm sm:text-base whitespace-nowrap"
           >
             Start New
           </button>
         </div>
       </div>
 
-      <div className="flex flex-col gap-8 md:gap-10">
+      <div className="flex flex-col gap-4 md:gap-5">
         {stems.map((stem) => {
           const isMuted = mutes[stem] || (isSoloActive && !solos[stem]);
 
           return (
             <div
               key={stem}
-              className="stem-track-card flex flex-col lg:flex-row gap-8 items-center group"
+              className="stem-track-card flex flex-col lg:flex-row gap-4 lg:gap-8 items-center group"
             >
               <div className="flex flex-col gap-5 w-full lg:w-56 shrink-0 bg-black/20 p-4 rounded-xl border border-white/5">
                 <div className="flex items-center justify-between pb-3 border-b border-white/5 mb-2">
-                  <span className="uppercase font-semibold text-[0.85rem] tracking-[0.1em] flex items-center gap-2 font-cinzel text-[#f5a623]">
+                  <span className="uppercase font-semibold text-[0.85rem] tracking-[0.1em] flex items-center gap-2 font-cinzel text-gold">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#f5a623]"></div>
                     {STEM_LABEL[stem] || stem}
                   </span>
@@ -672,7 +667,7 @@ function StemPlayer({ jobId, stems, onReset, fileName }: { jobId: string, stems:
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  {volumes[stem] === 0 || isMuted ? <VolumeX className="w-4 h-4 text-zinc-600" /> : <Volume2 className="w-4 h-4 text-[#f5a623]" />}
+                  {volumes[stem] === 0 || isMuted ? <VolumeX className="w-4 h-4 text-muted" /> : <Volume2 className="w-4 h-4 text-gold" />}
                   <input
                     type="range"
                     min="0" max="1" step="0.01"

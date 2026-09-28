@@ -220,7 +220,7 @@ function renderNotationGrid() {
     config.vibhags.forEach((vibhagSize, vIndex) => {
       const vibhagEl = document.createElement('div');
       vibhagEl.className = 'grid-vibhag';
-      
+
       for (let i = 0; i < vibhagSize; i++) {
         const matraData = line[matraCounter];
         const isFirstOfVibhag = (i === 0);
@@ -256,12 +256,13 @@ function renderNotationGrid() {
           contentEl.classList.add(`mod-${matraData.modifier}`);
         }
         contentEl.contentEditable = true;
+        contentEl.setAttribute('role', 'textbox');
+        contentEl.setAttribute('aria-label', `Line ${lineIndex + 1}, matra ${matraCounter + 1}`);
         contentEl.textContent = matraData ? matraData.content : '-';
-        
+
         // Highlight active focus
         if (notationState.activeCell.lineIndex === lineIndex && notationState.activeCell.matraIndex === matraCounter) {
-          contentEl.style.background = 'rgba(245,166,35,0.15)';
-          contentEl.style.border = '1px dashed var(--gold)';
+          contentEl.classList.add('is-selected');
         }
         
         // Capture indices for closure safety
@@ -280,12 +281,8 @@ function renderNotationGrid() {
         
         // Focus state visual highlight
         contentEl.addEventListener('focus', () => {
-          document.querySelectorAll('.grid-cell .cell-content').forEach(el => {
-            el.style.background = ''; 
-            el.style.border = '';
-          });
-          contentEl.style.background = 'rgba(245,166,35,0.15)';
-          contentEl.style.border = '1px dashed var(--gold)';
+          document.querySelectorAll('.grid-cell .cell-content.is-selected').forEach(el => el.classList.remove('is-selected'));
+          contentEl.classList.add('is-selected');
           notationState.activeCell = { lineIndex: currentLineIdx, matraIndex: currentMatraIdx };
         });
         
@@ -298,6 +295,41 @@ function renderNotationGrid() {
     
     gridContainer.appendChild(rowEl);
   });
+  fitGridToWidth();
+}
+
+// Narrow screens: a line of the grid wraps at vibhag boundaries into
+// balanced lines (Teentaal: 8 + 8 matras rather than 12 + 4). style.css sizes
+// each matra as 1/--per-line of the row.
+const MIN_MATRA_PX = 44;
+
+/** Matras per displayed line: the whole cycle if it fits in `fit` matras, else the fewest, most even lines of whole vibhags. */
+export function matrasPerLine(vibhags, fit) {
+  const sum = list => list.reduce((a, b) => a + b, 0);
+  if (sum(vibhags) <= fit) return sum(vibhags);
+  // Shortest possible longest line when the vibhags are split into `lines` runs
+  const longestLine = (start, lines) => {
+    if (lines === 1) return sum(vibhags.slice(start));
+    let best = Infinity, run = 0;
+    for (let end = start; end <= vibhags.length - lines; end++) {
+      run += vibhags[end];
+      best = Math.min(best, Math.max(run, longestLine(end + 1, lines - 1)));
+    }
+    return best;
+  };
+  for (let lines = 2; lines <= vibhags.length; lines++) {
+    const len = longestLine(0, lines);
+    if (len <= fit) return len;
+  }
+  return Math.max(...vibhags);
+}
+
+function fitGridToWidth() {
+  const grid = document.getElementById('nsGrid');
+  const row = grid && grid.querySelector('.grid-row');
+  if (!row || !row.clientWidth) return; // hidden: sized when it's shown
+  const fit = Math.max(1, Math.floor(row.clientWidth / MIN_MATRA_PX));
+  grid.style.setProperty('--per-line', matrasPerLine(TAAL_CONFIG[notationState.taal].vibhags, fit));
 }
 
 function renderPalette() {
@@ -308,7 +340,8 @@ function renderPalette() {
   const items = PALETTE_DATA[notationState.mode][notationState.language] || [];
   
   items.forEach(item => {
-    const el = document.createElement('div');
+    const el = document.createElement('button');
+    el.type = 'button';
     el.className = 'palette-item';
     el.textContent = item;
     
@@ -375,9 +408,10 @@ function renderFormatToolbar() {
   
   FORMAT_OPTS.forEach(opt => {
     const btn = document.createElement('button');
-    btn.className = 'header-icon-btn format-btn';
+    btn.className = 'header-icon-btn icon-only format-btn';
     btn.innerHTML = opt.icon;
     btn.title = opt.title;
+    btn.setAttribute('aria-label', opt.title);
     
     btn.addEventListener('click', () => {
       applyModifier(opt.id);
@@ -527,6 +561,7 @@ function setupExport() {
     clone.style.background = '#fff';
     clone.style.color = '#000';
     clone.querySelectorAll('.cell-content').forEach(c => {
+      c.classList.remove('is-selected', 'is-playing');
       c.style.color = '#000';
       // FIX: Disable contentEditable on all cells in the clone before passing to
       // html2pdf. This prevents the library from interpreting user-entered content
@@ -565,6 +600,8 @@ function setupExport() {
 // 8. Core Initialization
 export function initNotationStudio() {
   // Initial renders
+  const gridEl = document.getElementById('nsGrid');
+  if (gridEl && 'ResizeObserver' in window) new ResizeObserver(fitGridToWidth).observe(gridEl);
   renderTemplatesSelect();
   renderPalette();
   renderFormatToolbar();
@@ -641,16 +678,8 @@ export function initNotationStudio() {
     helpBtn.addEventListener('click', () => tutorialModal.classList.add('active'));
     closeBtn.addEventListener('click', () => tutorialModal.classList.remove('active'));
   }
-  
-  // Click outside to close modals (Enhances UX)
-  document.querySelectorAll('.modal-overlay').forEach(modal => {
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) {
-        modal.classList.remove('active');
-      }
-    });
-  });
-  
+  // (Escape / backdrop clicks close every modal: see core/modals.js)
+
   // Add Line Row
   document.getElementById('nsAddRowBtn')?.addEventListener('click', addLineRow);
   
@@ -754,6 +783,10 @@ function nsScheduler() {
   nsTimerID = setTimeout(nsScheduler, nsLookahead);
 }
 
+function clearPlayingHighlight() {
+  document.querySelectorAll('.grid-cell .cell-content.is-playing').forEach(el => el.classList.remove('is-playing'));
+}
+
 function nsScheduleNote(lineIdx, matraIdx, time) {
   const audioCtx = getAudioContext();
   if (lineIdx >= notationState.lines.length) return;
@@ -761,15 +794,10 @@ function nsScheduleNote(lineIdx, matraIdx, time) {
   if (!matra || matra.content === '-' || matra.content === 'ऽ') return;
 
   setTimeout(() => {
-     document.querySelectorAll('.grid-cell .cell-content').forEach(el => {
-       el.style.background = '';
-       el.style.border = '';
-     });
+     if (!nsPlaying) return;
+     clearPlayingHighlight();
      const cells = document.querySelectorAll('.grid-row')[lineIdx]?.querySelectorAll('.cell-content');
-     if (cells && cells[matraIdx]) {
-       cells[matraIdx].style.background = 'rgba(245,166,35,0.15)';
-       cells[matraIdx].style.border = '2px solid var(--accent)';
-     }
+     if (cells && cells[matraIdx]) cells[matraIdx].classList.add('is-playing');
   }, Math.max(0, (time - audioCtx.currentTime) * 1000));
 
   const dur = 60.0 / nsTempo();
@@ -811,11 +839,7 @@ function toggleNotationPlayback() {
     clearTimeout(nsTimerID);
     document.getElementById('nsPlayIcon').style.display = '';
     document.getElementById('nsPauseIcon').style.display = 'none';
-
-    document.querySelectorAll('.grid-cell .cell-content').forEach(el => {
-       el.style.background = '';
-       el.style.border = '';
-    });
+    clearPlayingHighlight();
   } else {
     const audioCtx = getAudioContext();
     if (audioCtx.state === 'suspended') {

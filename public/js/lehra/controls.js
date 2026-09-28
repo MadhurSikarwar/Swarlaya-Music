@@ -148,9 +148,11 @@ function initTransport() {
   document.addEventListener('keydown', e => {
     const tag = e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-    // Space / arrows control the lehra only while its page is showing.
-    if (!$('view-lehra')?.classList.contains('active-view')) return;
+    // Space / arrows control the lehra only while its page is showing (and no dialog is open).
+    if (!$('view-lehra')?.classList.contains('active-view') || document.body.classList.contains('modal-open')) return;
 
+    // Space on a focused button, link or summary presses that control instead.
+    if (e.code === 'Space' && (tag === 'BUTTON' || tag === 'A' || tag === 'SUMMARY')) return;
     if (e.code === 'Space') {
       e.preventDefault();
       togglePlay();
