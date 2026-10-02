@@ -4,6 +4,8 @@
  * deflate-compressed, in the URL hash (#n=…) — no server involved.
  */
 
+import { decodeShare, encodeShare, hashParam } from '../core/share.js';
+
 export const DOC_VERSION = 1;
 const LIBRARY_KEY = 'notation_library_v1';
 const MAX_CELL = 200;
@@ -58,52 +60,12 @@ export function deserialize(obj, taals) {
   };
 }
 
-// ── Share links ─────────────────────────────────────────────────────
-function toBase64Url(bytes) {
-  let s = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function fromBase64Url(text) {
-  const b = atob(text.replace(/-/g, '+').replace(/_/g, '/'));
-  const out = new Uint8Array(b.length);
-  for (let i = 0; i < b.length; i++) out[i] = b.charCodeAt(i);
-  return out;
-}
-
-async function pipe(bytes, stream) {
-  const out = new Response(new Blob([bytes]).stream().pipeThrough(stream));
-  return new Uint8Array(await out.arrayBuffer());
-}
-
-/** Object → hash payload: 'z' + deflated base64url, or 'j' + plain base64url without CompressionStream. */
-export async function encodeShare(obj) {
-  const json = new TextEncoder().encode(JSON.stringify(obj));
-  if (typeof CompressionStream === 'function') {
-    return 'z' + toBase64Url(await pipe(json, new CompressionStream('deflate-raw')));
-  }
-  return 'j' + toBase64Url(json);
-}
-
-export async function decodeShare(payload) {
-  const kind = payload[0], bytes = fromBase64Url(payload.slice(1));
-  let json;
-  if (kind === 'z') {
-    if (typeof DecompressionStream !== 'function') throw new Error('This browser can’t open compressed links');
-    json = await pipe(bytes, new DecompressionStream('deflate-raw'));
-  } else if (kind === 'j') {
-    json = bytes;
-  } else {
-    throw new Error('Not a composition link');
-  }
-  return JSON.parse(new TextDecoder().decode(json));
-}
+// ── Share links (encoding: core/share.js) ────────────────────────────
+export { encodeShare, decodeShare };
 
 /** The composition payload in a URL hash like "#n=z…", or null. */
 export function shareFromHash(hash) {
-  const m = /(?:^#|&)n=([A-Za-z0-9_-]+)/.exec(hash || '');
-  return m ? m[1] : null;
+  return hashParam(hash, 'n');
 }
 
 // ── Library (localStorage) ──────────────────────────────────────────

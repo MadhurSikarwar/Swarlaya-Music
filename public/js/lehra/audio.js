@@ -50,10 +50,10 @@ async function setup() {
   audio.engine = engine; // the drone is chosen and loaded by tanpura.js
 }
 
-function generateReverbIR(ctx, duration = 2, decay = 2.0) {
-  const rate = ctx.sampleRate;
-  const length = rate * duration;
-  const impulse = ctx.createBuffer(2, length, rate);
+/** A 2.5 s stereo noise-tail impulse response for the reverb, at `sampleRate`. */
+export function reverbImpulse(sampleRate, duration = 2.5, decay = 3.0) {
+  const length = Math.round(sampleRate * duration);
+  const impulse = new AudioBuffer({ numberOfChannels: 2, length, sampleRate });
   const left = impulse.getChannelData(0);
   const right = impulse.getChannelData(1);
   for (let i = 0; i < length; i++) {
@@ -64,44 +64,61 @@ function generateReverbIR(ctx, duration = 2, decay = 2.0) {
   return impulse;
 }
 
+/**
+ * The lehra + tanpura effects chain in `ctx` — shared by playback and the
+ * audio export (export.js), so an exported file sounds like playback:
+ *
+ *   mix → bass → treble ─┬─ dry ──────────┬─ compressor
+ *                        └─ reverb → wet ─┘
+ *
+ * The reverb branch (treble → reverb → wet) is left for the caller to wire,
+ * only while the reverb is in use.
+ */
+export function createFxChain(ctx, reverbIR) {
+  const mix = ctx.createGain();
+  const bass = ctx.createBiquadFilter();
+  bass.type = 'lowshelf';
+  bass.frequency.value = 200;
+  const treble = ctx.createBiquadFilter();
+  treble.type = 'highshelf';
+  treble.frequency.value = 3000;
+  const reverb = ctx.createConvolver();
+  reverb.buffer = reverbIR;
+  const dry = ctx.createGain();
+  dry.gain.value = 1;
+  const wet = ctx.createGain();
+  wet.gain.value = 0;
+  const compressor = ctx.createDynamicsCompressor();
+  compressor.threshold.value = -15;
+  compressor.knee.value = 20;
+  compressor.ratio.value = 10;
+  compressor.attack.value = 0.005;
+  compressor.release.value = 0.1;
+
+  mix.connect(bass);
+  bass.connect(treble);
+  treble.connect(dry);
+  dry.connect(compressor);
+  wet.connect(compressor);
+  return { mix, bass, treble, reverb, dry, wet, compressor };
+}
+
 function buildGraph() {
   const ctx = getAudioContext();
   audio.ctx = ctx;
 
-  const mix = ctx.createGain();
-  audio.filterBass = ctx.createBiquadFilter();
-  audio.filterBass.type = 'lowshelf';
-  audio.filterBass.frequency.value = 200;
-
-  audio.filterTreble = ctx.createBiquadFilter();
-  audio.filterTreble.type = 'highshelf';
-  audio.filterTreble.frequency.value = 3000;
-
-  audio.reverbNode = ctx.createConvolver();
-  audio.reverbNode.buffer = generateReverbIR(ctx, 2.5, 3.0);
-
-  audio.dryGain = ctx.createGain();
-  audio.dryGain.gain.value = 1;
-  audio.wetGain = ctx.createGain();
-  audio.wetGain.gain.value = 0;
+  // The reverb path is wired only while the reverb slider is above 0 (see mixer.js).
+  const fx = createFxChain(ctx, reverbImpulse(ctx.sampleRate));
+  const mix = fx.mix;
+  audio.filterBass = fx.bass;
+  audio.filterTreble = fx.treble;
+  audio.reverbNode = fx.reverb;
+  audio.dryGain = fx.dry;
+  audio.wetGain = fx.wet;
 
   audio.analyser = ctx.createAnalyser();
   audio.analyser.fftSize = 256;
-
-  const compressor = ctx.createDynamicsCompressor();
-  compressor.threshold.setValueAtTime(-15, ctx.currentTime);
-  compressor.knee.setValueAtTime(20, ctx.currentTime);
-  compressor.ratio.setValueAtTime(10, ctx.currentTime);
-  compressor.attack.setValueAtTime(0.005, ctx.currentTime);
-  compressor.release.setValueAtTime(0.1, ctx.currentTime);
-
-  // The reverb path is wired only while the reverb slider is above 0 (see mixer.js).
-  mix.connect(audio.filterBass);
-  audio.filterBass.connect(audio.filterTreble);
-  audio.filterTreble.connect(audio.dryGain);
-  audio.dryGain.connect(compressor);
-  audio.wetGain.connect(compressor);
-  compressor.connect(audio.analyser);
+  fx.compressor.connect(audio.analyser);
   audio.analyser.connect(getMasterOutput());
 
   audio.gainLehra = ctx.createGain();

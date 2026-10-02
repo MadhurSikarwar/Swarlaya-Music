@@ -12,13 +12,16 @@ import { getMasterOutput, outputLatency, startMediaOutput, stopMediaOutput } fro
 import { clearMediaSession, setMediaPlaybackState, showMediaSession } from '../core/media-session.js';
 import { LehraEngine, buildTanpuraLoop, songBpm } from '../lehra/engine.js';
 import { TANPURA_BASE_HZ, TANPURA_URL, state as lehraState } from '../lehra/state.js';
-import { addInto, formatTime, shiftToSa, toMono } from './song.js';
+import { ANALYSIS_SR, estimateSa, pitchTrackAsync } from '../tuner/analysis.js';
+import { abJump, addInto, formatTime, setLoopPoint, shiftToSa, toMono } from './song.js';
 
 const JOB_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const NOTES = [['C', 130.81], ['C#', 138.59], ['D', 146.83], ['D#', 155.56], ['E', 164.81], ['F', 174.61],
   ['F#', 185.0], ['G', 196.0], ['G#', 207.65], ['A', 220.0], ['A#', 233.08], ['B', 246.94]];
 const STEM_LABEL = { no_vocals: 'Accompaniment', vocals: 'Vocals' };
 const MAX_SEMITONES = 12;
+const MIN_LOOP_SEC = 1;
+const SURE_OF_SA = 0.35;   // below this, the detected Sa is only suggested
 
 let engine = null;
 let engineReady = null;
@@ -35,6 +38,9 @@ let looping = true;
 let posTimer = 0;
 let seeking = false;
 let usingMediaOutput = false; // this page took the lock-screen output
+let ab = null;           // A–B loop: { a, b } as positions 0–1 (b null until set)
+let abTimer = 0;
+let abHold = 0;          // performance.now() until which a jump is settling
 
 function message(text, isError = false) {
   const el = $('practiceMessage');
@@ -218,7 +224,85 @@ function syncTransport() {
   $('practiceLoop').classList.toggle('active', looping);
   clearInterval(posTimer);
   if (playing) posTimer = setInterval(showPosition, 200);
+  clearInterval(abTimer);
+  if (playing && ab && ab.b !== null) abTimer = setInterval(abTick, 25);
   showPosition();
+}
+
+// ── A–B loop ───────────────────────────────────────────────────────
+function abTick() {
+  if (!playing || !song || performance.now() < abHold) return;
+  // The position being rendered (not heard), so the jump isn't late
+  const b = engine.beatAt(getAudioContext().currentTime);
+  if (b === null) return;
+  const to = abJump(b - Math.floor(b), ab);
+  if (to === null) return;
+  engine.seek(to);
+  abHold = performance.now() + 250; // until the engine reports the new position
+}
+
+function showLoop() {
+  const band = $('practiceAbBand'), range = $('practiceAbRange');
+  $('practiceAbClear').hidden = !ab;
+  if (!ab || !song) {
+    band.hidden = true;
+    range.textContent = 'Loop a phrase: set A, then B.';
+    return;
+  }
+  const dur = song.len / song.sr;
+  band.hidden = ab.b === null;
+  if (ab.b !== null) {
+    band.style.left = `${ab.a * 100}%`;
+    band.style.width = `${(ab.b - ab.a) * 100}%`;
+  }
+  range.textContent = ab.b === null
+    ? `A at ${formatTime(ab.a * dur)} — now set B.`
+    : `Looping ${formatTime(ab.a * dur)} – ${formatTime(ab.b * dur)}`;
+}
+
+function setLoop(which) {
+  if (!song) return;
+  const next = setLoopPoint(ab, which, position(), MIN_LOOP_SEC / (song.len / song.sr));
+  if (!next) { status('B has to come at least a second after A.'); return; }
+  ab = next;
+  status('');
+  showLoop();
+  syncTransport();
+}
+
+function clearLoop() {
+  ab = null;
+  showLoop();
+  syncTransport();
+}
+
+// ── The song's Sa ──────────────────────────────────────────────────
+/** Estimate the song's Sa from its vocals and offer it (a quiet background job). */
+async function detectSongSa(forJob) {
+  if (!forJob.stems.includes('vocals')) return;
+  const hint = $('practiceSaHint');
+  hint.textContent = 'listening for Sa…';
+  try {
+    const bytes = await stemBytes('vocals');
+    const decoder = new OfflineAudioContext(1, 1, ANALYSIS_SR);
+    const vocals = await decoder.decodeAudioData(bytes.slice(0));
+    const track = await pitchTrackAsync(vocals.getChannelData(0), ANALYSIS_SR);
+    if (job !== forJob) return;
+    const est = estimateSa(track, NOTES);
+    if (!est) { hint.textContent = 'too little singing to tell'; return; }
+    const note = NOTES[est.index][0];
+    if (est.confidence >= SURE_OF_SA) {
+      if ($('practiceSongSa').value === '') $('practiceSongSa').value = String(est.index);
+      hint.textContent = `detected ${note}`;
+      status(`The song's Sa sounds like ${note} — press Match to move it to your Sa.`);
+    } else {
+      hint.textContent = `maybe ${note}? check by ear`;
+    }
+  } catch (err) {
+    if (err.expired) return;
+    console.warn('Sa detection:', err);
+    hint.textContent = '';
+  }
 }
 
 function showPosition() {
@@ -298,11 +382,16 @@ export async function openPracticeFromUrl() {
     }
     const stems = Array.isArray(info.stems) && info.stems.length ? info.stems : ['vocals', 'drums', 'bass', 'guitar', 'piano', 'other'];
     job = { id, stems, bytes: new Map() };
+    ab = null;
+    $('practiceSaHint').textContent = '';
+    $('practiceSongSa').value = '';
     const name = sessionStorage.getItem(`practice-name-${id}`);
     $('practiceTitle').textContent = name ? `“${name}” — the accompaniment, at your Sa and your tempo.` : 'The accompaniment of your song, at your Sa and your tempo.';
     renderStems(stems);
     resumeAt = 0;
     await buildMix();
+    showLoop();
+    detectSongSa(job);
   } catch (err) {
     if (err.expired) expired();
     else message(`Couldn't open the separation: ${err.message}`, true);
@@ -360,6 +449,9 @@ export function initPractice() {
     else resumeAt = p;
     showPosition();
   });
+  $('practiceSetA').addEventListener('click', () => setLoop('a'));
+  $('practiceSetB').addEventListener('click', () => setLoop('b'));
+  $('practiceAbClear').addEventListener('click', clearLoop);
   $('practiceSongVol').addEventListener('input', applyVolumes);
   $('practiceDroneVol').addEventListener('input', applyVolumes);
   ['practiceSeek', 'practiceSpeed', 'practiceSongVol', 'practiceDroneVol'].forEach(id => trackSliderFill($(id)));

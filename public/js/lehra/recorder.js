@@ -5,6 +5,10 @@
  * tab as Blob URLs, to play back or download — nothing leaves the browser.
  * The microphone is recorded, never played back.
  *
+ * A second recorder keeps the microphone alone, for the take's intonation
+ * report (intonation.js) — the lehra in the mix would confuse the pitch
+ * tracker. It stays in the tab and is never downloaded.
+ *
  * You play along with what you hear, which is later than what is rendered
  * (the output latency) and reaches the recorder later still (the input
  * latency), so the lehra is delayed by both before it's mixed in.
@@ -13,6 +17,7 @@ import { $ } from '../core/dom.js';
 import { isMediaOutputActive, outputLatency } from '../core/audio-output.js';
 import { acquireMic, micSupported, releaseMic } from '../core/mic.js';
 import { audio, ensureAudio } from './audio.js';
+import { analyseTake, renderReport } from './intonation.js';
 import { state } from './state.js';
 
 const MIX_LEVEL = 0.8;                 // lehra/tanpura under the voice
@@ -45,7 +50,7 @@ export function syncDelay({ output, input, mediaElement }) {
 }
 
 let rec = null;     // the recording in progress
-const takes = [];   // { url, name, file, secs, downloaded }
+const takes = [];   // { url, name, file, secs, downloaded, voice (Blob), sa }
 let takeCount = 0;
 
 function fmt(secs) {
@@ -88,10 +93,19 @@ async function startRecording() {
     const mimeType = pickMimeType(t => MediaRecorder.isTypeSupported(t));
     const recorder = new MediaRecorder(dest.stream, mimeType ? { mimeType, audioBitsPerSecond: 128000 } : undefined);
     const chunks = [];
-    const session = { recorder, chunks, mic, meter, delay, mix, dest, started: performance.now(), raag: state.raag, date: new Date(), raf: 0 };
+    // The voice alone, for the intonation report
+    const voiceChunks = [];
+    const voiceRecorder = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: 64000 } : undefined);
+    const voiceDone = new Promise(resolve => { voiceRecorder.onstop = resolve; });
+    voiceRecorder.ondataavailable = e => { if (e.data && e.data.size) voiceChunks.push(e.data); };
+    const session = {
+      recorder, chunks, voiceRecorder, voiceChunks, voiceDone, mic, meter, delay, mix, dest,
+      started: performance.now(), raag: state.raag, sa: state.pitchHz, date: new Date(), raf: 0,
+    };
     recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
     recorder.onstop = () => finishTake(session);
     recorder.start(1000);
+    voiceRecorder.start(1000);
     rec = session;
     $('recBtn').textContent = '■ Stop';
     $('recBtn').classList.add('active', 'recording');
@@ -119,15 +133,18 @@ export function stopRecording() {
   cancelAnimationFrame(s.raf);
   s.secs = (performance.now() - s.started) / 1000;
   if (s.recorder.state !== 'inactive') s.recorder.stop();
+  if (s.voiceRecorder.state !== 'inactive') s.voiceRecorder.stop();
   try { audio.analyser.disconnect(s.delay); } catch { /* already disconnected */ }
   [s.mic, s.meter, s.delay, s.mix].forEach(n => n.disconnect());
   releaseMic();
 }
 
-function finishTake(s) {
+async function finishTake(s) {
   if (!s.chunks.length) { setStatus('Nothing was recorded.'); return; }
   const type = s.recorder.mimeType || s.chunks[0].type || 'audio/webm';
   const blob = new Blob(s.chunks, { type });
+  await s.voiceDone;
+  const voice = s.voiceChunks.length ? new Blob(s.voiceChunks, { type: s.voiceRecorder.mimeType || type }) : null;
   takeCount++;
   takes.unshift({
     url: URL.createObjectURL(blob),
@@ -136,6 +153,8 @@ function finishTake(s) {
     secs: s.secs,
     bytes: blob.size,
     downloaded: false,
+    voice,
+    sa: s.sa,
   });
   setStatus('Saved in this tab — download the takes you want to keep.');
   renderTakes();
@@ -181,14 +200,52 @@ function renderTakes() {
       takes.splice(takes.indexOf(t), 1);
       renderTakes();
     });
-    head.append(name, dl, del);
+    const report = document.createElement('div');
+    report.className = 'take-report';
+    report.hidden = true;
+    const check = document.createElement('button');
+    check.className = 'header-icon-btn';
+    check.textContent = 'Intonation';
+    check.title = 'How in tune was your singing? A pitch graph of this take against the swaras';
+    check.disabled = !t.voice;
+    check.addEventListener('click', () => showIntonation(t, report, check));
+    head.append(name, check, dl, del);
     const player = document.createElement('audio');
     player.controls = true;
     player.preload = 'metadata';
     player.src = t.url;
-    li.append(head, player);
+    li.append(head, player, report);
+    if (t.analysis) {
+      report.hidden = false;
+      renderReport(report, t.analysis);
+    }
     ul.appendChild(li);
   });
+}
+
+/** Analyse the take's voice (once) and show — or hide — its intonation report. */
+async function showIntonation(t, el, button) {
+  if (!el.hidden && t.analysis) { el.hidden = true; return; }
+  el.hidden = false;
+  if (!t.analysis) {
+    button.disabled = true;
+    el.innerHTML = '<p class="tool-status">Listening to your take…</p>';
+    try {
+      t.analysis = await analyseTake(t.voice, t.sa, f => {
+        el.innerHTML = `<p class="tool-status">Listening to your take… ${Math.round(f * 100)}%</p>`;
+      });
+    } catch (err) {
+      el.innerHTML = '';
+      const p = document.createElement('p');
+      p.className = 'tool-status';
+      p.textContent = `Couldn't analyse this take: ${err.message}`;
+      el.appendChild(p);
+      return;
+    } finally {
+      button.disabled = false;
+    }
+  }
+  renderReport(el, t.analysis);
 }
 
 export function initRecorder() {

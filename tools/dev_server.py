@@ -12,6 +12,10 @@ run `docker compose up --build` for the full site.
 
 Usage (from webapp/):   python tools/dev_server.py [port]      default 3000
 Standard library only; Python 3.8+.
+
+To check the static build (node tools/build-static.mjs) as a static host
+serves it — a page per route, robots.txt, sitemap.xml — pass its folder:
+                        python tools/dev_server.py 3001 dist
 """
 import json
 import mimetypes
@@ -23,8 +27,8 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlsplit
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # webapp/
-ROOT_FILES = {'sw.js', 'manifest.json', 'favicon.ico'}
-SPA_ROUTES = {'lehra', 'hindustani', 'carnatic', 'notation', 'practice'}
+ROOT_FILES = {'sw.js', 'manifest.json', 'favicon.ico', 'robots.txt', 'sitemap.xml'}  # sitemap: static build only
+SPA_ROUTES = {'lehra', 'hindustani', 'carnatic', 'notation', 'practice', 'games'}
 TYPES = {  # explicit: Windows' registry maps some of these oddly (e.g. .aac)
     '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
     '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.txt': 'text/plain; charset=utf-8',
@@ -68,15 +72,19 @@ class Handler(SimpleHTTPRequestHandler):
         """Map a URL path to a file on disk (or None → 404), as StaticController does."""
         rel = unquote(path).lstrip('/')
         if rel in ('', 'index.html') or rel.rstrip('/') in SPA_ROUTES:
-            return os.path.join(ROOT, 'index.html')
+            # A static build has a page per route; the source tree has the one index.html
+            page = os.path.join(ROOT, rel.rstrip('/'), 'index.html')
+            return page if os.path.isfile(page) else os.path.join(ROOT, 'index.html')
         if rel in ROOT_FILES:
             return os.path.join(ROOT, rel)
-        for prefix, base in (('assets/', 'assets'), ('public/', 'public'),
-                             ('_next/', os.path.join('public', 'separator', '_next'))):
+        sep = os.path.join(ROOT, 'public', 'separator')
+        if not os.path.isdir(sep):
+            sep = os.path.join(ROOT, 'separator')  # where the static build puts it
+        for prefix, base in (('assets/', os.path.join(ROOT, 'assets')), ('public/', os.path.join(ROOT, 'public')),
+                             ('_next/', os.path.join(sep, '_next'))):
             if rel.startswith(prefix):
-                return safe_join(os.path.join(ROOT, base), rel[len(prefix):])
+                return safe_join(base, rel[len(prefix):])
         if rel == 'separator' or rel.startswith('separator/'):
-            sep = os.path.join(ROOT, 'public', 'separator')
             target = safe_join(sep, rel[len('separator/'):]) if rel != 'separator' else sep
             if target and os.path.isdir(target):
                 target = os.path.join(target, 'index.html')
@@ -114,7 +122,12 @@ class IPv6Server(ThreadingHTTPServer):
 
 
 def main():
+    global ROOT
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 3000
+    if len(sys.argv) > 2:  # a static build to serve instead of the source tree
+        ROOT = os.path.abspath(sys.argv[2])
+        if not os.path.isfile(os.path.join(ROOT, 'index.html')):
+            sys.exit(f'{ROOT} has no index.html — build it first: node tools/build-static.mjs')
     os.chdir(ROOT)
     handler = lambda *a: Handler(*a, directory=ROOT)  # noqa: E731
     try:

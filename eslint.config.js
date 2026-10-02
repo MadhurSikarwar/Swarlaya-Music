@@ -27,6 +27,16 @@ export default [
     },
   },
   {
+    // Web Workers (the audio export's renderer and MP3 encoder)
+    files: ['public/js/**/*.worker.js'],
+    languageOptions: { globals: globals.worker },
+  },
+  {
+    // A classic worker: loads the LAME encoder with importScripts
+    files: ['public/js/lehra/mp3.worker.js'],
+    languageOptions: { sourceType: 'script', globals: { lamejs: 'readonly' } },
+  },
+  {
     files: ['sw.js'],
     languageOptions: { sourceType: 'script', globals: globals.serviceworker },
   },

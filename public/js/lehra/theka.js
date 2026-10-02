@@ -51,6 +51,23 @@ export function thekaVibhags(taal) {
 }
 
 /**
+ * One avartan (cycle) matra by matra, as the taal circle draws it:
+ * { length, matras: [{ matra, role, marker, bol }] }. `marker` is set on the
+ * first matra of each vibhag, `bol` is '' when the taal has no theka.
+ */
+export function taalCycle(taal) {
+  const length = cycleLength(taal);
+  const markers = vibhagMarkers(taal);
+  const vibhags = thekaVibhags(taal);
+  const bols = vibhags && vibhags.flat().length === length ? vibhags.flat() : null;
+  const matras = [];
+  for (let m = 1; m <= length; m++) {
+    matras.push({ matra: m, role: matraRole(taal, m), marker: markers.get(m) || '', bol: bols ? bols[m - 1] : '' });
+  }
+  return { length, matras };
+}
+
+/**
  * One entry per matra of the whole loop — { matra, bol, marker } where
  * marker is set on the first matra of each vibhag — or null without a theka.
  */

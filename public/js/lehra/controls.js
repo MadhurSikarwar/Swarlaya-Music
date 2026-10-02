@@ -1,6 +1,7 @@
 /** Pitch, tempo, transport, keyboard, options, modals and fullscreen controls. */
 import { $ } from '../core/dom.js';
 import { setMediaOutputEnabled, startMediaOutput } from '../core/audio-output.js';
+import { focusRaagSearch } from './finder.js';
 import { applyPitchChange, applyTempoChange, setLooping, stopPlayback, togglePlay } from './player.js';
 import { renderStats } from './riyaz.js';
 import { bpmToProgress, changeTempo, progressToBpm, setBpm, syncSlider } from './selection.js';
@@ -137,6 +138,7 @@ function initTempoControls() {
 export function setLoop(on) {
   setLooping(on);
   $('loopBtn').classList.toggle('active', state.isLooping);
+  $('loopBtn').setAttribute('aria-pressed', String(state.isLooping));
 }
 
 function initTransport() {
@@ -145,11 +147,23 @@ function initTransport() {
   $('loopBtn').classList.add('active');
   $('loopBtn').addEventListener('click', () => setLoop(!state.isLooping));
 
+  // Keyboard shortcuts (listed in the Keyboard Shortcuts dialog — keep the two in step)
+  const letterKeys = {
+    s: stopPlayback,
+    l: () => setLoop(!state.isLooping),
+    m: () => $('metronomeToggle').click(),
+    t: () => $('tapTempoBtn').click(),
+    f: () => $('fullscreenBtn').click(),
+    '/': focusRaagSearch,
+    '?': () => $('shortcutsModal').classList.add('active'),
+  };
   document.addEventListener('keydown', e => {
     const tag = e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-    // Space / arrows control the lehra only while its page is showing (and no dialog is open).
+    // They control the lehra only while its page is showing (and no dialog is open) —
+    // and never take a browser shortcut (Ctrl+S, Alt+←, …).
     if (!$('view-lehra')?.classList.contains('active-view') || document.body.classList.contains('modal-open')) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
 
     // Space on a focused button, link or summary presses that control instead.
     if (e.code === 'Space' && (tag === 'BUTTON' || tag === 'A' || tag === 'SUMMARY')) return;
@@ -158,7 +172,14 @@ function initTransport() {
       togglePlay();
     } else if (e.code === 'ArrowUp' || e.code === 'ArrowDown') {
       e.preventDefault();
-      changeTempo(state.bpm + (e.code === 'ArrowUp' ? 1 : -1));
+      changeTempo(state.bpm + (e.code === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 5 : 1));
+    } else {
+      // "?" is Shift + "/" on most layouts; some report it as "/" with Shift held
+      const key = e.key === '/' && e.shiftKey ? '?' : e.key.toLowerCase();
+      const action = letterKeys[key];
+      if (!action || e.repeat) return;
+      e.preventDefault();
+      action();
     }
   });
 }
@@ -192,6 +213,7 @@ function initModalsAndFullscreen() {
     $('statsModal').classList.add('active');
   });
   $('statsClose')?.addEventListener('click', () => $('statsModal').classList.remove('active'));
+  $('shortcutsBtn')?.addEventListener('click', () => $('shortcutsModal').classList.add('active'));
 
   $('fullscreenBtn')?.addEventListener('click', () => {
     if (!document.fullscreenElement) {

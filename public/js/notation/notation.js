@@ -614,9 +614,11 @@ export function initNotationStudio() {
       const group = e.target.closest('.toggle-group');
       if (!group) return;
       
-      group.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
-      e.target.classList.add('active');
-      
+      group.querySelectorAll('.toggle-btn').forEach(b => {
+        b.classList.toggle('active', b === e.target);
+        b.setAttribute('aria-pressed', String(b === e.target));
+      });
+
       const val = e.target.getAttribute('data-val');
       
       if (group.id === 'modeToggle') {
@@ -883,7 +885,10 @@ function applyComposition(c) {
   });
   const groups = { modeToggle: c.mode, systemToggle: c.system, langToggle: c.language };
   for (const [id, val] of Object.entries(groups)) {
-    document.querySelectorAll(`#${id} .toggle-btn`).forEach(b => b.classList.toggle('active', b.dataset.val === val));
+    document.querySelectorAll(`#${id} .toggle-btn`).forEach(b => {
+      b.classList.toggle('active', b.dataset.val === val);
+      b.setAttribute('aria-pressed', String(b.dataset.val === val));
+    });
   }
   document.getElementById('nsTaal').value = c.taal;
   document.getElementById('nsTitle').value = c.title;

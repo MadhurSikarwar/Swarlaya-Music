@@ -29,6 +29,12 @@ function bindShelf(sliderId, labelId, filterKey) {
   slider.style.setProperty('--val', '50%');
 }
 
+/** Wet and dry levels for the reverb slider's value (0–100); playback and the export. */
+export function reverbLevels(v) {
+  const wet = v / 100;
+  return { wet, dry: 1 - wet * 0.5 };
+}
+
 function bindReverb() {
   const slider = $('fxReverb');
   if (!slider) return;
@@ -37,8 +43,7 @@ function bindReverb() {
 
   slider.addEventListener('input', e => {
     const v = +e.target.value;
-    const wet = v / 100;
-    const dry = 1 - (wet * 0.5);
+    const { wet, dry } = reverbLevels(v);
     $('fxReverbVal').textContent = v + '%';
     slider.style.setProperty('--val', v + '%');
     if (!audio.filterTreble) return; // no graph yet: applied when it's built

@@ -75,6 +75,53 @@ export function checkpointRiyaz() {
   }
 }
 
+/** 45 → "45 s", 150 → "3 min", 4500 → "1 h 15 min". */
+export function formatPractice(secs) {
+  if (secs < 60) return `${Math.max(0, Math.round(secs))} s`;
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins} min`;
+  return mins % 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${Math.floor(mins / 60)} h`;
+}
+
+/**
+ * All-time practice from the per-day log: { total, days } in seconds and
+ * days practised. `entries` = [[storage key, value], …].
+ */
+export function riyazTotals(entries) {
+  let total = 0, days = 0;
+  for (const [key, value] of entries) {
+    if (!/^lehra_riyaz_\d{4}-\d{2}-\d{2}$/.test(key)) continue;
+    const secs = parseInt(value, 10) || 0;
+    if (secs > 0) { total += secs; days++; }
+  }
+  return { total, days };
+}
+
+/** Practice so far — today, the last 7 days and all time — with the goal and streak. */
+export function riyazSummary(now = new Date()) {
+  const goalSecs = goalMinutes() * 60;
+  const today = secondsOn(now);
+  let week = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    week += secondsOn(d);
+  }
+  let stored = [];
+  try {
+    stored = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
+      .map(key => [key, localStorage.getItem(key)]);
+  } catch { /* storage unavailable */ }
+  let { total, days } = riyazTotals(stored);
+  // …plus the session still running, which isn't in the log yet
+  const running = today - savedSeconds(now);
+  if (running > 0) {
+    total += running;
+    if (savedSeconds(now) === 0) days++;
+  }
+  return { today, week, total, days, goalSecs, streak: riyazStreak(secondsOn, goalSecs, now) };
+}
+
 /** Last-7-days chart, today's goal progress and the streak (Riyaz Tracker modal). */
 export function renderStats() {
   const chart = $('statsChart');
@@ -88,26 +135,43 @@ export function renderStats() {
     const d = new Date();
     d.setDate(d.getDate() - i);
     const secs = secondsOn(d);
-    bars.push({ date: d.toLocaleDateString('en-US', { weekday: 'short' }), secs, isToday: i === 0 });
+    bars.push({
+      date: d.toLocaleDateString('en-US', { weekday: 'short' }),
+      day: d.toLocaleDateString('en-US', { weekday: 'long' }),
+      secs, isToday: i === 0,
+    });
     if (i === 0) totalToday = secs;
   }
 
   const maxSecs = Math.max(...bars.map(b => b.secs), goalSecs, 60);
   bars.forEach(b => {
     const heightPct = (b.secs / maxSecs) * 100;
+    const label = `${b.isToday ? 'Today' : b.day}: ${formatPractice(b.secs)}${b.secs >= goalSecs ? ' (goal met)' : ''}`;
     chart.innerHTML += `
-      <div class="stat-bar-container">
+      <div class="stat-bar-container" title="${label}">
         <div class="stat-bar${b.secs >= goalSecs ? ' met' : ''}" style="height: ${Math.max(2, heightPct)}%; opacity: ${b.isToday ? '1' : '0.7'};"></div>
         <div class="stat-label">${b.date}</div>
       </div>
     `;
   });
+  // The chart read out as one sentence instead of seven unlabelled bars
+  chart.setAttribute('role', 'img');
+  chart.setAttribute('aria-label', 'Practice over the last 7 days. ' +
+    bars.map(b => `${b.isToday ? 'Today' : b.day} ${formatPractice(b.secs)}`).join(', ') + '.');
+
+  const summary = riyazSummary();
+  if ($('statsWeek')) {
+    $('statsWeek').textContent = formatPractice(summary.week);
+    $('statsAllTime').textContent = formatPractice(summary.total);
+    $('statsDays').textContent = summary.days;
+    $('statsEmpty').hidden = summary.total > 0;
+  }
   // Goal line across the chart
   chart.insertAdjacentHTML('beforeend',
     `<div class="stat-goal-line" style="bottom: ${(goalSecs / maxSecs * 100).toFixed(1)}%"></div>`);
 
   const minToday = Math.round(totalToday / 60);
-  $('statsTotalToday').textContent = minToday + (minToday === 1 ? ' min' : ' mins');
+  $('statsTotalToday').textContent = formatPractice(totalToday); // under a minute shows as seconds, not "0 mins"
   $('statsGoalBar').style.width = Math.min(100, totalToday / goalSecs * 100).toFixed(1) + '%';
   $('statsGoalText').textContent = totalToday >= goalSecs
     ? `Goal met: ${minToday} / ${goalMinutes()} min`

@@ -23,7 +23,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
         {/* The main site's stylesheet: the header, hero and shared components look the same on both */}
-        <link rel="stylesheet" href="/public/css/style.css?v=28" />
+        <link rel="stylesheet" href="/public/css/style.css?v=30" />
       </head>
       <body className="min-h-full flex flex-col">
         {/* Ambient Background Orbs */}
@@ -55,6 +55,7 @@ export default function RootLayout({
             <a className="nav-btn" href="/carnatic">Carnatic</a>
             <a className="nav-btn" href="/hindustani">Hindustani</a>
             <a className="nav-btn active" href="/separator/" aria-current="page">STEM</a>
+            <a className="nav-btn" href="/games">Games</a>
           </nav>
         </header>
 

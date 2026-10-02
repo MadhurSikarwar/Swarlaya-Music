@@ -4,15 +4,32 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Swaralaya</title>
-  <meta name="description"
-    content="A beautiful web-based Indian classical practice player. Choose your instrument, taal, raag, and tempo." />
+  <!-- Title, description and the social tags below are the home page's. Each
+       view has its own (public/js/core/routes.js): navigation.js applies them
+       in the browser, and the static build (tools/build-static.mjs) bakes a
+       page per route with them, a canonical URL and structured data. -->
+  <title>Swaralaya — Indian Classical Music Practice Tools</title>
+  <meta name="description" content="Free practice tools for Indian classical music: lehra player with tanpura, Carnatic shruti box and talam, notation editor, swar tuner and ear-training games." />
+  <meta name="robots" content="index, follow" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Swaralaya" />
+  <meta property="og:title" content="Swaralaya — Indian Classical Music Practice Tools" />
+  <meta property="og:description" content="Free practice tools for Indian classical music: lehra player with tanpura, Carnatic shruti box and talam, notation editor, swar tuner and ear-training games." />
+  <meta property="og:url" content="/" />
+  <meta property="og:image" content="/public/icons/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Swaralaya: practice tools for Indian classical music" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Swaralaya — Indian Classical Music Practice Tools" />
+  <meta name="twitter:description" content="Free practice tools for Indian classical music: lehra player with tanpura, Carnatic shruti box and talam, notation editor, swar tuner and ear-training games." />
+  <meta name="twitter:image" content="/public/icons/og-image.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@300;400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="/public/css/style.css?v=28" />
+  <link rel="stylesheet" href="/public/css/style.css?v=30" />
   <link rel="manifest" href="/manifest.json" />
   <link rel="icon" href="/public/icons/icon.svg" type="image/svg+xml" />
   <link rel="icon" href="/favicon.ico" sizes="48x48" />
@@ -22,6 +39,7 @@
 </head>
 
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
 
   <!-- Ambient Background Orbs -->
   <div class="bg-orb orb-1"></div>
@@ -51,6 +69,7 @@
       <a class="nav-btn" href="/carnatic" data-target="view-carnatic" data-domain="carnatic">Carnatic</a>
       <a class="nav-btn" href="/hindustani" data-target="view-hindustani" data-domain="hindustani">Hindustani</a>
       <a class="nav-btn" href="/separator/" data-domain="stem">STEM</a>
+      <a class="nav-btn" href="/games" data-target="view-games" data-domain="games">Games</a>
     </nav>
     <div class="header-right">
       <button id="tunerBtn" class="header-icon-btn icon-only" title="Swar tuner (microphone)" aria-label="Swar tuner">
@@ -67,7 +86,7 @@
   </header>
 
   <!-- Main App -->
-  <main class="app-container">
+  <main class="app-container" id="main" tabindex="-1">
 
     <!-- HOME VIEW -->
     <div id="view-home" class="app-view active-view">
@@ -75,6 +94,27 @@
         <h1 class="hero-title">Where Tradition Meets <span class="text-gradient">Technology</span></h1>
         <p class="hero-subtitle">Explore Indian Classical music tools powered by AI and STEM.</p>
       </div>
+
+      <!-- Continue your riyaz: the last lehra setup and today's practice
+           (js/lehra/resume.js) — hidden until there is something to resume -->
+      <section class="resume-card" id="resumeCard" aria-label="Your riyaz" hidden>
+        <div class="resume-main">
+          <p class="resume-label">Continue your riyaz</p>
+          <p class="resume-title" id="resumeTitle"></p>
+          <p class="resume-sub" id="resumeSub"></p>
+        </div>
+        <div class="resume-goal">
+          <div class="resume-goal-row">
+            <span id="resumeToday"></span>
+            <span class="resume-streak" id="resumeStreak"></span>
+          </div>
+          <div class="tool-progress" role="progressbar" id="resumeGoal" aria-label="Today's riyaz goal" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="tool-bar" id="resumeGoalBar"></div>
+          </div>
+        </div>
+        <a class="btn-tap resume-btn" href="/lehra" data-target="view-lehra" data-domain="hindustani">Open the Lehra Player</a>
+      </section>
+
       <div class="dashboard-grid">
         <a class="dashboard-card fade-up delay-1" href="/carnatic" data-target="view-carnatic" data-domain="carnatic">
           <div class="card-icon" aria-hidden="true">
@@ -85,7 +125,7 @@
             </svg>
           </div>
           <div class="card-body">
-            <h3>Carnatic</h3>
+            <h2>Carnatic</h2>
             <p>Explore tools for South Indian classical music practice and notation.</p>
           </div>
         </a>
@@ -99,7 +139,7 @@
             </svg>
           </div>
           <div class="card-body">
-            <h3>Hindustani</h3>
+            <h2>Hindustani</h2>
             <p>Access the Lehra Player and Notation Editor for North Indian classical music.</p>
           </div>
         </a>
@@ -108,8 +148,17 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h4l2-9 5 18 4-9h5"></path></svg>
           </div>
           <div class="card-body">
-            <h3>STEM</h3>
+            <h2>STEM</h2>
             <p>AI Audio Separation. Isolate vocals, drums, bass, and more.</p>
+          </div>
+        </a>
+        <a class="dashboard-card fade-up delay-4" href="/games" data-target="view-games" data-domain="games">
+          <div class="card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="6"/><path d="M6 12h4M8 10v4"/><circle cx="15.5" cy="11" r="1"/><circle cx="18" cy="13" r="1"/></svg>
+          </div>
+          <div class="card-body">
+            <h2>Games</h2>
+            <p>Train your ear and your laya: name the swar, catch the sam.</p>
           </div>
         </a>
       </div>
@@ -239,7 +288,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"></path></svg>
           </div>
           <div class="card-body">
-            <h3>Lehra Player</h3>
+            <h2>Lehra Player</h2>
             <p>Practice with realistic Indian classical instruments, taals, and tempos.</p>
           </div>
         </a>
@@ -248,7 +297,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
           </div>
           <div class="card-body">
-            <h3>Notation Editor</h3>
+            <h2>Notation Editor</h2>
             <p>Write, play, and export compositions using Bhatkhande notation.</p>
           </div>
         </a>
@@ -257,7 +306,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
           </div>
           <div class="card-body">
-            <h3>Practise Along</h3>
+            <h2>Practise Along</h2>
             <p>Separate any song, then play its accompaniment at your own Sa and tempo.</p>
           </div>
         </a>
@@ -266,6 +315,8 @@
 
     <!-- LEHRA PLAYER VIEW -->
     <div id="view-lehra" class="app-view" style="display: none;" data-domain="hindustani">
+    <!-- The page's heading: the visible title is the raag (Now Playing) -->
+    <h1 class="visually-hidden">Lehra Player</h1>
 
     <!-- Now Playing Card -->
     <section class="now-playing-card" id="nowPlayingCard">
@@ -306,8 +357,11 @@
         <div class="np-label-row">
           <p class="np-label">Now Playing</p>
           <span class="status-badge" id="loadingBadge">Ready</span>
+          <button type="button" class="fav-btn" id="favBtn" aria-pressed="false" aria-label="Add to favourites" hidden>
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3.3l2.68 5.5 6.02.86-4.36 4.2 1.04 5.96L12 16.98 6.62 19.82l1.04-5.96L3.3 9.66l6.02-.86z" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          </button>
         </div>
-        <h1 class="np-raag" id="npRaag">Select a Raag</h1>
+        <h2 class="np-raag" id="npRaag">Select a Raag</h2>
         <p class="np-details" id="npDetails">Choose instrument, taal &amp; tempo to begin</p>
         <div class="np-tags" id="npTags">
           <span class="tag" id="tagInstrument">—</span>
@@ -349,6 +403,22 @@
           </div>
         </div>
       </div>
+      <!-- Taal circle: one avartan, drawn by js/lehra/taal-circle.js -->
+      <div class="np-taal" id="taalCircle" hidden></div>
+    </section>
+
+    <!-- Raag finder: one search across instrument, taal and raag, with
+         favourites and the recently played (js/lehra/finder.js) -->
+    <section class="raag-finder" aria-label="Find a raag">
+      <div class="finder-field">
+        <svg class="finder-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input type="search" id="raagSearch" class="finder-input" placeholder="Find a raag, taal or instrument"
+          autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="raagResults"
+          aria-autocomplete="list" aria-label="Find a raag, taal or instrument">
+        <kbd class="finder-key" aria-hidden="true">/</kbd>
+        <ul class="finder-results" id="raagResults" role="listbox" aria-label="Matching raags" hidden></ul>
+      </div>
+      <div class="finder-chips" id="raagChips" role="group" aria-label="Favourites and recently played"></div>
     </section>
 
     <!-- Controls Grid -->
@@ -414,6 +484,7 @@
               type="number"
               id="tempoValue"
               class="tempo-value-input"
+              aria-label="Tempo in beats per minute"
               value="90"
               min="20"
               max="400"
@@ -458,18 +529,18 @@
             <span id="tanpuraVolVal" class="vol-val">50%</span>
           </label>
           <div class="tanpura-options">
-            <select id="tanpuraStyleSelect" class="pitch-select small-select" title="Tanpura sound">
+            <select id="tanpuraStyleSelect" class="pitch-select small-select" title="Tanpura sound" aria-label="Tanpura sound">
               <option value="classic">Classic recording</option>
               <option value="auto">Plucked · auto</option>
               <option value="male">Plucked · male (Sa C#)</option>
               <option value="female">Plucked · female (Sa G#)</option>
             </select>
-            <select id="tanpuraFirstSelect" class="pitch-select small-select" title="First string of the plucked tanpura">
+            <select id="tanpuraFirstSelect" class="pitch-select small-select" title="First string of the plucked tanpura" aria-label="First string of the plucked tanpura">
               <option value="pa">1st string Pa</option>
               <option value="ma">1st string Ma</option>
               <option value="ni">1st string Ni</option>
             </select>
-            <select id="tanpuraPaceSelect" class="pitch-select small-select" title="Plucking pace">
+            <select id="tanpuraPaceSelect" class="pitch-select small-select" title="Plucking pace" aria-label="Tanpura plucking pace">
               <option value="slow">Slow</option>
               <option value="medium" selected>Medium</option>
               <option value="fast">Fast</option>
@@ -500,7 +571,7 @@
               <rect x="14" y="4" width="4" height="16" rx="1" />
             </svg>
           </button>
-          <button class="btn-transport btn-loop active" id="loopBtn" title="Toggle loop" aria-label="Toggle loop">
+          <button class="btn-transport btn-loop active" id="loopBtn" title="Loop (L)" aria-label="Loop" aria-pressed="true">
             <svg viewBox="0 0 24 24" fill="currentColor">
               <path d="M17 17H7V14l-4 4 4 4v-3h12v-6h-2v4zM7 7h10v3l4-4-4-4v3H5v6h2V7z" />
             </svg>
@@ -586,6 +657,45 @@
           <ul class="take-list" id="takeList"></ul>
         </details>
 
+        <details class="tool-box" id="exportBox">
+          <summary>Export audio <span class="tool-sub">save the lehra as an MP3 or WAV file</span></summary>
+          <p class="export-summary" id="exSummary" aria-live="polite"></p>
+          <div class="tool-grid">
+            <label>Length <input type="number" id="exAmount" class="num-input" value="5" min="0.5" max="999" step="0.5"></label>
+            <select id="exUnit" class="pitch-select small-select" aria-label="Length in">
+              <option value="min">minutes</option>
+              <option value="cycles">cycles</option>
+            </select>
+            <select id="exFormat" class="pitch-select small-select" aria-label="File format">
+              <option value="mp3">MP3 · 192 kbps</option>
+              <option value="wav">WAV · 16-bit lossless</option>
+            </select>
+          </div>
+          <div class="tool-grid export-options">
+            <label class="toggle-label" title="Round the length up to whole taal cycles, so the lehra ends on sam">
+              <input type="checkbox" id="exEndSam" class="toggle-checkbox" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-text">End on sam</span>
+            </label>
+            <label class="toggle-label" title="Include the tanpura, at its volume and sound">
+              <input type="checkbox" id="exTanpura" class="toggle-checkbox" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-text">Tanpura</span>
+            </label>
+            <label class="toggle-label" title="Include the metronome, with its sound, subdivisions and accents">
+              <input type="checkbox" id="exMetronome" class="toggle-checkbox">
+              <span class="toggle-slider"></span>
+              <span class="toggle-text">Metronome</span>
+            </label>
+          </div>
+          <div class="tool-row">
+            <button class="btn-tap" id="exBtn">Export</button>
+            <div class="tool-progress"><div class="tool-bar" id="exBar"></div></div>
+          </div>
+          <p class="tool-status" id="exStatus" aria-live="polite">Uses the current raag, tempo, Sa, volumes, tanpura sound and Studio FX. It's rendered on this device, much faster than real time.</p>
+          <ul class="take-list" id="exList"></ul>
+        </details>
+
         <!-- Beat Visualizer -->
         <div class="beat-visualizer">
           <div class="beat-label">Beat Indicator</div>
@@ -602,9 +712,9 @@
         <span class="info-dot" id="infoDot"></span>
         <span id="statusText">Ready — select a raag to begin</span>
       </div>
-      <div class="info-item shortcuts-hint">
-        Shortcuts: Space = Play/Pause, ↑↓ = Tempo
-      </div>
+      <button type="button" class="info-item shortcuts-hint shortcuts-btn" id="shortcutsBtn" title="Show all keyboard shortcuts">
+        Space = Play/Pause, ↑↓ = Tempo · all shortcuts <kbd>?</kbd>
+      </button>
       <div class="info-item">
         <span>Indian Classical Lehra Player</span>
       </div>
@@ -640,8 +750,17 @@
 
           <div class="practice-seek">
             <span id="practicePos">0:00</span>
-            <input type="range" id="practiceSeek" class="vol-slider" min="0" max="1000" value="0" aria-label="Position in the song">
+            <div class="practice-seek-track">
+              <div class="ab-band" id="practiceAbBand" hidden></div>
+              <input type="range" id="practiceSeek" class="vol-slider" min="0" max="1000" value="0" aria-label="Position in the song">
+            </div>
             <span id="practiceDur">0:00</span>
+          </div>
+          <div class="practice-ab">
+            <button type="button" class="header-icon-btn" id="practiceSetA" title="Start the loop here">Set A</button>
+            <button type="button" class="header-icon-btn" id="practiceSetB" title="End the loop here — the song then repeats A to B">Set B</button>
+            <span class="practice-ab-range" id="practiceAbRange">Loop a phrase: set A, then B.</span>
+            <button type="button" class="header-icon-btn icon-only" id="practiceAbClear" hidden title="Clear the loop" aria-label="Clear the A–B loop">×</button>
           </div>
 
           <div class="practice-grid">
@@ -667,6 +786,7 @@
               <label class="practice-label" for="practiceSongSa">Song's Sa</label>
               <div class="practice-controls">
                 <select id="practiceSongSa" class="pitch-select small-select"><option value="">—</option></select>
+                <span class="practice-unit" id="practiceSaHint" aria-live="polite"></span>
               </div>
             </div>
             <div class="practice-field">
@@ -697,15 +817,126 @@
       </section>
     </div>
 
+    <!-- GAMES VIEW (public/js/games/) -->
+    <div id="view-games" class="app-view" style="display: none;" data-domain="games">
+      <div class="hero-section fade-up">
+        <h1 class="hero-title">Riyaz <span class="text-gradient">Games</span></h1>
+        <p class="hero-subtitle">Train your ear and your laya — one round at a time.</p>
+      </div>
+
+      <!-- Hub -->
+      <div class="dashboard-grid games-hub" id="gamesHub">
+        <button type="button" class="dashboard-card" data-game="swar">
+          <div class="card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10v4M7 7v10M11 4v16M15 8v8M19 10v4"/></svg>
+          </div>
+          <div class="card-body">
+            <h2>Swar Pehchaan</h2>
+            <p>A drone holds Sa, a swar is sung — which one was it? Three lives, rising levels.</p>
+            <span class="card-meta" id="swarBestLabel">No score yet</span>
+          </div>
+        </button>
+        <button type="button" class="dashboard-card" data-game="sam">
+          <div class="card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="6" r="1.6" fill="currentColor" stroke="none"/><path d="M12 12l4.5 2.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
+          </div>
+          <div class="card-body">
+            <h2>Sam Pakdo</h2>
+            <p>The lehra plays — tap exactly on sam. Six stages, from Teentaal to drut.</p>
+            <span class="card-meta" id="samStarsLabel">★ 0 stars</span>
+          </div>
+        </button>
+      </div>
+
+      <!-- Swar Pehchaan -->
+      <section class="control-panel game-panel" id="swarGame" hidden>
+        <div class="game-top">
+          <button type="button" class="header-icon-btn" data-game-back>← Games</button>
+          <h2 class="panel-title">Swar Pehchaan</h2>
+        </div>
+        <div id="swPlay">
+          <div class="game-hud">
+            <div class="hud-item"><span class="hud-label">Score</span><span class="hud-value" id="swScore">0</span></div>
+            <div class="hud-item hud-wide"><span class="hud-label">Level</span><span class="hud-value" id="swLevel">1 · Bhupali</span></div>
+            <div class="hud-item"><span class="hud-label">Streak</span><span class="hud-value" id="swStreak">×1</span></div>
+            <div class="hud-item"><span class="hud-label">Lives</span><span class="hud-value hud-lives" id="swLives">♥♥♥</span></div>
+          </div>
+          <div class="swar-stage">
+            <button type="button" class="swar-orb" id="swOrb" aria-label="Hear the swar again">?</button>
+            <p class="game-prompt" id="swPrompt" aria-live="polite">A drone plays Sa; then listen for the mystery swar and find it on the keyboard.</p>
+          </div>
+          <div class="swar-keys" id="swKeys" role="group" aria-label="Swaras"></div>
+          <div class="game-actions">
+            <button type="button" class="btn-tap" id="swStart">Start</button>
+            <button type="button" class="header-icon-btn" id="swHearSa">Hear Sa</button>
+          </div>
+          <p class="game-hint">Keyboard: S R G M P D N · Shift + R G D N for komal, Shift + M for tivra · Space plays it again</p>
+        </div>
+        <div class="game-results" id="swResults" hidden>
+          <p class="result-label">Game over</p>
+          <p class="result-score" id="swResultScore">0</p>
+          <p class="result-best" id="swResultBest"></p>
+          <p class="result-stats" id="swResultStats"></p>
+          <div id="swResultTrickyWrap" hidden>
+            <p class="result-label">Tricky ones</p>
+            <ul class="result-list" id="swResultTricky"></ul>
+          </div>
+          <div class="game-actions">
+            <button type="button" class="btn-tap" id="swAgain">Play again</button>
+            <button type="button" class="header-icon-btn" data-game-back>Games</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sam Pakdo -->
+      <section class="control-panel game-panel" id="samGame" hidden>
+        <div class="game-top">
+          <button type="button" class="header-icon-btn" data-game-back>← Games</button>
+          <h2 class="panel-title">Sam Pakdo</h2>
+        </div>
+        <p class="game-prompt" id="samIntro">Sam is the first, heaviest beat of the taal cycle — the X on the wheel. Listen to one cycle, then tap on every sam. Earn a star to unlock the next stage.</p>
+        <div class="stage-list" id="samStages"></div>
+        <div id="samPlay" hidden>
+          <div class="game-hud">
+            <div class="hud-item"><span class="hud-label">Score</span><span class="hud-value" id="samScore">0</span></div>
+            <div class="hud-item"><span class="hud-label">Combo</span><span class="hud-value" id="samCombo">—</span></div>
+            <div class="hud-item"><span class="hud-label">Sam</span><span class="hud-value" id="samCount">0 / 0</span></div>
+          </div>
+          <p class="sam-stage-name" id="samStageName"></p>
+          <div class="sam-arena">
+            <svg class="taal-wheel" id="samWheel" viewBox="-112 -112 224 224" role="img" aria-label="Taal wheel"></svg>
+            <div class="sam-feedback" id="samFeedback" aria-live="polite"></div>
+          </div>
+          <button type="button" class="btn-sam" id="samTap">Sam!</button>
+          <p class="game-prompt" id="samPrompt" aria-live="polite"></p>
+          <p class="game-hint">Tap the button (or the wheel), or press Space. Use wired headphones or speakers — Bluetooth adds delay.</p>
+          <div class="game-actions"><button type="button" class="header-icon-btn" id="samQuit">Stop</button></div>
+        </div>
+        <div class="game-results" id="samResults" hidden>
+          <p class="result-stars" id="samResultStars">☆☆☆</p>
+          <p class="result-score" id="samResultScore">0</p>
+          <p class="result-best" id="samResultBest"></p>
+          <p class="result-stats" id="samResultStats"></p>
+          <p class="result-stats" id="samResultTiming"></p>
+          <div class="game-actions">
+            <button type="button" class="btn-tap" id="samNext" hidden>Next stage</button>
+            <button type="button" class="btn-tap" id="samRetry">Try again</button>
+            <button type="button" class="header-icon-btn" id="samBackToStages">Stages</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
     <!-- NOTATION EDITOR VIEW -->
     <div id="view-notation" class="app-view" style="display: none;" data-domain="hindustani">
+      <h1 class="visually-hidden">Notation Editor</h1>
       <section class="notation-card studio-layout">
         
         <!-- Sidebar Palette -->
         <aside class="studio-sidebar">
           <div class="sidebar-header">
-            <h3 class="sidebar-title">Palette</h3>
-            <input type="text" class="palette-search" placeholder="Search..." id="paletteSearch">
+            <h2 class="sidebar-title">Palette</h2>
+            <input type="text" class="palette-search" placeholder="Search..." id="paletteSearch" aria-label="Search the palette">
           </div>
           <div class="palette-grid" id="paletteGrid">
             <!-- Populated dynamically based on Mode & Lang -->
@@ -718,17 +949,17 @@
           <!-- Top Control Bar -->
           <div class="studio-topbar">
             <div class="studio-toggles">
-              <div class="toggle-group" id="modeToggle">
-                <button class="toggle-btn active" data-val="tabla">Tabla</button>
-                <button class="toggle-btn" data-val="vocal">Vocal</button>
+              <div class="toggle-group" id="modeToggle" role="group" aria-label="Notation for">
+                <button class="toggle-btn active" data-val="tabla" aria-pressed="true">Tabla</button>
+                <button class="toggle-btn" data-val="vocal" aria-pressed="false">Vocal</button>
               </div>
-              <div class="toggle-group" id="systemToggle">
-                <button class="toggle-btn active" data-val="bhatkhande">Bhatkhande</button>
-                <button class="toggle-btn" data-val="paluskar">Paluskar</button>
+              <div class="toggle-group" id="systemToggle" role="group" aria-label="Notation system">
+                <button class="toggle-btn active" data-val="bhatkhande" aria-pressed="true">Bhatkhande</button>
+                <button class="toggle-btn" data-val="paluskar" aria-pressed="false">Paluskar</button>
               </div>
-              <div class="toggle-group" id="langToggle">
-                <button class="toggle-btn active" data-val="en">English</button>
-                <button class="toggle-btn" data-val="hi">हिंदी</button>
+              <div class="toggle-group" id="langToggle" role="group" aria-label="Language">
+                <button class="toggle-btn active" data-val="en" aria-pressed="true">English</button>
+                <button class="toggle-btn" data-val="hi" aria-pressed="false">हिंदी</button>
               </div>
             </div>
             
@@ -791,9 +1022,42 @@
         </div>
       </section>
     </div> <!-- End view-notation -->
-  
+
 
   </main>
+
+  <!-- Site footer: every tool is one link from every page -->
+  <footer class="site-footer">
+    <nav class="footer-nav" aria-label="All tools">
+      <a href="/lehra" data-target="view-lehra" data-domain="hindustani">Lehra Player</a>
+      <a href="/notation" data-target="view-notation" data-domain="hindustani">Notation Editor</a>
+      <a href="/carnatic" data-target="view-carnatic" data-domain="carnatic">Carnatic Shruti &amp; Talam</a>
+      <a href="/games" data-target="view-games" data-domain="games">Riyaz Games</a>
+      <a href="/separator/">Stem Separator</a>
+    </nav>
+    <div class="footer-meta">
+      <span>Swaralaya — free practice tools for Indian classical music.</span>
+      <button type="button" class="header-icon-btn" id="installBtn" hidden title="Add Swaralaya to this device — it opens like an app and works offline">Install app</button>
+    </div>
+  </footer>
+
+  <!-- Lehra mini player: the transport within reach when the main one has
+       scrolled out of view (js/lehra/mini-player.js) -->
+  <div class="mini-player" id="miniPlayer" role="region" aria-label="Lehra playback" hidden>
+    <div class="mini-progress" aria-hidden="true"><div class="mini-progress-fill" id="miniProgress"></div></div>
+    <button type="button" class="mini-info" id="miniInfo" title="Back to Now Playing">
+      <span class="mini-title" id="miniTitle"></span>
+      <span class="mini-sub" id="miniSub"></span>
+    </button>
+    <span class="mini-matra" id="miniMatra" aria-hidden="true"></span>
+    <button type="button" class="mini-btn" id="miniStop" title="Stop" aria-label="Stop">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2" /></svg>
+    </button>
+    <button type="button" class="mini-btn mini-play" id="miniPlay" title="Play / Pause" aria-label="Play">
+      <svg id="miniPlayIcon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+      <svg id="miniPauseIcon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true" style="display:none"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
+    </button>
+  </div>
 
   <!-- ── Modals: shown by adding .active; public/js/core/modals.js closes them
        on Escape, a backdrop click or a [data-close-modal] button ── -->
@@ -896,6 +1160,28 @@
     </div>
   </div>
 
+  <!-- Lehra keyboard shortcuts -->
+  <div id="shortcutsModal" class="modal-overlay">
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle">
+      <div class="modal-header">
+        <h2 class="panel-title" id="shortcutsTitle">Keyboard Shortcuts</h2>
+        <button class="modal-close" data-close-modal aria-label="Close">&times;</button>
+      </div>
+      <dl class="shortcut-list">
+        <div><dt><kbd>Space</kbd></dt><dd>Play / pause</dd></div>
+        <div><dt><kbd>S</kbd></dt><dd>Stop</dd></div>
+        <div><dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Tempo ± 1 BPM — with <kbd>Shift</kbd>, ± 5</dd></div>
+        <div><dt><kbd>T</kbd></dt><dd>Tap tempo</dd></div>
+        <div><dt><kbd>L</kbd></dt><dd>Loop on / off</dd></div>
+        <div><dt><kbd>M</kbd></dt><dd>Metronome on / off</dd></div>
+        <div><dt><kbd>F</kbd></dt><dd>Fullscreen</dd></div>
+        <div><dt><kbd>/</kbd></dt><dd>Find a raag</dd></div>
+        <div><dt><kbd>?</kbd></dt><dd>This list</dd></div>
+      </dl>
+      <p class="modal-hint modal-hint-last">They work on the Lehra Player page whenever you aren't typing in a field.</p>
+    </div>
+  </div>
+
   <!-- Presets -->
   <div id="presetsModal" class="modal-overlay">
     <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="presetsTitle">
@@ -909,6 +1195,11 @@
         <button type="submit" class="header-icon-btn">Save current</button>
       </form>
       <ul class="preset-list" id="presetList"></ul>
+      <div class="ns-file-row">
+        <button type="button" class="header-icon-btn" id="presetShareBtn" title="A link that opens this exact setup — instrument, taal, raag, tempo, Sa, volumes and options">Copy share link</button>
+      </div>
+      <input type="text" id="presetShareUrl" class="text-input ns-share-url" readonly placeholder="A link to your current setup appears here" aria-label="Setup share link">
+      <p class="tool-status" id="presetShareStatus" aria-live="polite"></p>
     </div>
   </div>
 
@@ -956,6 +1247,12 @@
       <div class="stats-total">
         Total today: <span id="statsTotalToday">0m</span>
       </div>
+      <div class="stats-tiles">
+        <div class="stat-tile"><span class="stat-tile-value" id="statsWeek">0 min</span><span class="stat-tile-label">Last 7 days</span></div>
+        <div class="stat-tile"><span class="stat-tile-value" id="statsAllTime">0 min</span><span class="stat-tile-label">All time</span></div>
+        <div class="stat-tile"><span class="stat-tile-value" id="statsDays">0</span><span class="stat-tile-label">Days practised</span></div>
+      </div>
+      <p class="modal-hint stats-empty" id="statsEmpty" hidden>Nothing logged yet — time is counted whenever a lehra is playing.</p>
       <div class="goal-box">
         <div class="goal-row">
           <label class="goal-label">Daily goal <input type="number" id="statsGoalInput" class="num-input" min="1" max="600" value="15"> min</label>

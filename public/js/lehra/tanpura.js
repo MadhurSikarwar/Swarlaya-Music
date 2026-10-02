@@ -148,7 +148,8 @@ const cache = new Map(); // key → Promise<{ loop, sa }>
 let applied = null;      // key of the drone the engine has
 let request = 0;
 
-function styleKey() {
+/** The chosen tanpura: 'classic', or 'set|first|pace' for a plucked one. */
+export function styleKey() {
   const style = $sel('tanpuraStyleSelect', 'classic');
   if (style === 'classic') return 'classic';
   const set = style === 'auto' ? autoSet(state.pitchHz) : style;
@@ -160,16 +161,24 @@ function $sel(id, fallback) {
   return (el && el.value) || fallback;
 }
 
-function build(key) {
-  const engine = audio.engine;
+/**
+ * The drone loop for style `key` in the engine's format — { loop, sa } with
+ * sa = the loop's Sa in Hz. `decode(url)` resolves to an AudioBuffer (the
+ * live engine's, or the audio export's at its own sample rate).
+ */
+export function droneLoop(key, decode) {
   if (key === 'classic') {
-    return engine.decode(TANPURA_URL).then(a => ({
+    return decode(TANPURA_URL).then(a => ({
       loop: buildTanpuraLoop(a.getChannelData(0), a.sampleRate, 64), sa: TANPURA_BASE_HZ,
     }));
   }
   const [setName, first, pace] = key.split('|');
-  return pluckedTanpura(url => engine.decode(url), setName, first, pace)
+  return pluckedTanpura(decode, setName, first, pace)
     .then(({ core, sa }) => ({ loop: padLoop(core, 64), sa }));
+}
+
+function build(key) {
+  return droneLoop(key, url => audio.engine.decode(url));
 }
 
 /** Give the engine the selected tanpura (crossfades if it's playing). */

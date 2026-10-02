@@ -5,13 +5,28 @@
   "buildCommand": "node tools/build-static.mjs",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/:page(lehra|hindustani|carnatic|notation|practice)", "destination": "/index.html" },
-    { "source": "/:page(lehra|hindustani|carnatic|notation|practice)/", "destination": "/index.html" },
+    { "source": "/:page(lehra|hindustani|carnatic|notation|practice|games)", "destination": "/:page/index.html" },
+    { "source": "/:page(lehra|hindustani|carnatic|notation|practice|games)/", "destination": "/:page/index.html" },
     { "source": "/separator", "destination": "/separator/index.html" }
   ],
   "headers": [
     {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    },
+    {
+      "source": "/practice",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+    },
+    {
       "source": "/assets/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
+    },
+    {
+      "source": "/public/icons/(.*)",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
     },
     {

@@ -3,12 +3,18 @@
  * metronome options, loop and wake lock are saved to localStorage and
  * restored on load — plus named presets of the same snapshot.
  *
+ * A setup can also travel as a link (/lehra#s=…, core/share.js) that opens
+ * it on another device — for a teacher sending a student the exact raag,
+ * taal, tempo and Sa.
+ *
  * Restoring goes through the real UI paths: each control gets its value and
  * the same input/change event a user would fire, and the raag is re-selected
  * with selectByNames(), so labels, state, the audio graph and the raag
  * preload all stay consistent.
  */
 import { $ } from '../core/dom.js';
+import { decodeShare, encodeShare, hashParam } from '../core/share.js';
+import { toast } from '../core/toast.js';
 import { setLoop } from './controls.js';
 import { selectByNames } from './selection.js';
 import { FINE_TUNE_MAX_HZ, FINE_TUNE_MIN_HZ, onSettingsChange, state } from './state.js';
@@ -220,6 +226,7 @@ function renderPresets() {
       applySettings(p.settings);
       $('presetsModal').classList.remove('active');
       setStatus(`Preset “${p.name}” applied`, state.isPlaying ? 'playing' : '');
+      toast(`Preset “${p.name}” applied`, { type: 'success' });
     });
 
     const del = document.createElement('button');
@@ -241,10 +248,13 @@ function renderPresets() {
 function initPresets() {
   $('presetsBtn')?.addEventListener('click', () => {
     renderPresets();
+    $('presetShareUrl').value = '';
+    $('presetShareStatus').textContent = '';
     $('presetsModal').classList.add('active');
     $('presetName').focus();
   });
   $('presetsClose')?.addEventListener('click', () => $('presetsModal').classList.remove('active'));
+  $('presetShareBtn')?.addEventListener('click', copySetupLink);
   $('presetForm')?.addEventListener('submit', e => {
     e.preventDefault();
     const input = $('presetName');
@@ -261,7 +271,46 @@ function initPresets() {
     }
     input.value = '';
     renderPresets();
+    toast(`Preset “${name}” saved`, { type: 'success' });
   });
+}
+
+// ── Share links ────────────────────────────────────────────────────
+const SETUP_APP = 'swaralaya-lehra';
+
+/** A link that opens this exact setup: /lehra#s=… */
+export async function setupShareLink() {
+  return `${location.origin}/lehra#s=${await encodeShare({ app: SETUP_APP, s: snapshot() })}`;
+}
+
+async function copySetupLink() {
+  const field = $('presetShareUrl');
+  field.value = await setupShareLink();
+  field.select();
+  try {
+    await navigator.clipboard.writeText(field.value);
+    $('presetShareStatus').textContent = 'Link copied — whoever opens it gets this exact setup.';
+  } catch {
+    $('presetShareStatus').textContent = 'Copy the link above to share this setup.';
+  }
+}
+
+/** Open a setup shared as a link (#s=…) in the Lehra player. Call after navigation is initialised. */
+export async function openSharedSetup() {
+  const payload = hashParam(location.hash, 's');
+  if (!payload) return;
+  history.replaceState(history.state, '', location.pathname + location.search);
+  try {
+    const obj = await decodeShare(payload);
+    const s = obj && obj.app === SETUP_APP ? parseSettings(obj.s) : null;
+    if (!s) throw new Error('it isn’t a Lehra setup');
+    document.dispatchEvent(new CustomEvent('nav-internal', { detail: { target: 'view-lehra', domain: 'hindustani' } }));
+    applySettings(s);
+    setStatus(`Opened a shared setup: ${presetSummary(s)}`, '');
+    toast(`Opened a shared setup: ${presetSummary(s)}`, { type: 'success', duration: 6000 });
+  } catch (err) {
+    alert(`This setup link can't be opened: ${err.message}`);
+  }
 }
 
 // ── Init ───────────────────────────────────────────────────────────

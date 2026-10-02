@@ -55,6 +55,7 @@ export const state = {
 // Tiny event bus between the Lehra modules:
 //   'settings'  selection, tempo, pitch or loop changed (settings.js saves)
 //   'playback'  'playing' | 'paused' | 'stopped' | 'ended' (player.js)
+//   'matra'     (matra, total) the matra now sounding, 0 when stopped (scheduler.js)
 const listeners = {};
 export function on(event, fn) { (listeners[event] ||= []).push(fn); }
 export function emit(event, ...args) { (listeners[event] || []).forEach(fn => fn(...args)); }

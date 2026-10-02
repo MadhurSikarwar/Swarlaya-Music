@@ -26,6 +26,22 @@ export function shiftToSa(songSa, mySa) {
   return ((st % 12) + 12 + 6) % 12 - 6;
 }
 
+/**
+ * A–B loop: where to jump when the song is at `pos` (0–1) — back to A once
+ * it reaches B — or null to keep playing. `ab` = { a, b }; b null = not set.
+ */
+export function abJump(pos, ab) {
+  if (!ab || ab.b === null || ab.b === undefined) return null;
+  return pos >= ab.b ? ab.a : null;
+}
+
+/** Set loop point A or B at `pos`; B must come at least `minGap` after A. Returns the new { a, b } or null if B is too early. */
+export function setLoopPoint(ab, which, pos, minGap) {
+  if (which === 'a') return { a: pos, b: ab && ab.b !== null && ab.b > pos + minGap ? ab.b : null };
+  const a = ab ? ab.a : 0;
+  return pos > a + minGap ? { a, b: pos } : null;
+}
+
 /** e.g. 61.6 → "1:01" */
 export function formatTime(seconds) {
   const s = Math.max(0, Math.floor(seconds));

@@ -1,7 +1,11 @@
 {
-  "name": "Swaralaya",
+  "id": "/",
+  "name": "Swaralaya — Indian Classical Practice",
   "short_name": "Swaralaya",
-  "description": "Indian classical practice: lehra player, tanpura and notation editor",
+  "description": "Practice tools for Indian classical music: lehra player, tanpura, Carnatic shruti box and talam, notation editor, swar tuner and riyaz games.",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["music", "education"],
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -29,6 +33,28 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Lehra Player",
+      "url": "/lehra",
+      "icons": [{ "src": "/public/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Notation Editor",
+      "url": "/notation",
+      "icons": [{ "src": "/public/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Carnatic Shruti & Talam",
+      "url": "/carnatic",
+      "icons": [{ "src": "/public/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Riyaz Games",
+      "url": "/games",
+      "icons": [{ "src": "/public/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }

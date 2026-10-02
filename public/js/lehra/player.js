@@ -8,6 +8,7 @@
 import { $ } from '../core/dom.js';
 import { startMediaOutput, stopMediaOutput } from '../core/audio-output.js';
 import { clearMediaSession, setMediaPlaybackState, showMediaSession } from '../core/media-session.js';
+import { toast } from '../core/toast.js';
 import { audio, ensureAudio } from './audio.js';
 import { CATALOGUE } from './catalogue.js';
 import { loadMetronomeSounds } from './metronome.js';
@@ -117,9 +118,17 @@ function playingStatus() {
   return `Playing: ${state.raag} · ${state.instrument} · ${state.bpm} BPM`;
 }
 
+/** What to tell the user when a raag's audio can't be loaded. */
+function loadErrorMessage(err) {
+  return navigator.onLine === false
+    ? `${state.raag} isn’t saved on this device yet — connect to the internet to play it once.`
+    : `Couldn’t load ${state.raag}: ${err.message}`;
+}
+
 async function loadAndPlay(mediaReady = Promise.resolve()) {
   if (!state.raag || !state.taalData) {
     setStatus('Select instrument → taal → raag first', '');
+    toast('Choose an instrument, a taal and a raag first.'); // the status line may be off-screen
     return;
   }
   const file = currentRaagFile();
@@ -184,6 +193,7 @@ async function loadAndPlay(mediaReady = Promise.resolve()) {
     if (currentFetchId !== fetchId) return; // Ignore errors from overridden requests
     console.error('Audio load error:', err);
     setStatus('Audio error: ' + err.message, '');
+    toast(loadErrorMessage(err), { type: 'error' });
     setBadge('Error', false);
     state.isPlaying = false;
     showPlay();
@@ -216,6 +226,7 @@ export async function switchPlayingRaag() {
     if (currentFetchId !== fetchId) return;
     console.error('Audio load error:', err);
     setStatus('Audio error: ' + err.message, '');
+    toast(loadErrorMessage(err), { type: 'error' });
   }
 }
 

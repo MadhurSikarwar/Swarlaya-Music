@@ -76,7 +76,7 @@ COPY --from=builder /usr/local/lib/libtrantor.so* /usr/local/lib/
 RUN ldconfig
 
 # Only what the server serves (see StaticController) plus its config
-COPY index.html sw.js manifest.json favicon.ico /app/
+COPY index.html sw.js manifest.json favicon.ico robots.txt /app/
 COPY public/ /app/public/
 COPY assets/ /app/assets/
 COPY drogon_server/config.json /app/config.json

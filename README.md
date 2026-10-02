@@ -28,12 +28,13 @@
 
 | Component | Route | Technology | Purpose |
 |---|---|---|---|
-| **Lehra Player** | `/lehra` | Web Audio API + AudioWorklet | Real-time lehra playback, dynamic Kaiser-sinc pitch shifting, WSOLA time stretching, theka, laya trainer, tanpura |
+| **Lehra Player** | `/lehra` | Web Audio API + AudioWorklet | Real-time lehra playback, dynamic Kaiser-sinc pitch shifting, WSOLA time stretching, theka, taal circle, laya trainer, tanpura, MP3/WAV export, shareable setup links |
 | **Notation Editor** | `/notation` | Web Audio Synthesizer + Canvas | Bhatkhande/Paluskar notation creator with synthesized tabla & vocal playback, PDF export & stateless URL compression |
 | **Carnatic Suite** | `/carnatic` | Lookahead Scheduler + Audio Nodes | Plucked tanpura & reed shruti box drone + 35 suladi talas with visual kriya indicators and sound triggers |
 | **Swar Tuner** | *Global Header* | AudioWorklet + YIN Pitch Algorithm | Real-time swar detection relative to base Sa in Just Intonation or Equal Temperament (cents deviation needle) |
 | **AI Stem Separator** | `/separator/` | Next.js 14 + Drogon C++ + Demucs | Extracts vocals, drums, bass, guitar, piano & other using Meta's `htdemucs_6s` neural network |
-| **Practise Along** | `/practice` | AudioWorklet (Song Mode) | Transpose, time-stretch and isolate stems from separated songs to practise along in real time |
+| **Practise Along** | `/practice` | AudioWorklet (Song Mode) | Transpose, time-stretch and isolate stems from separated songs to practise along in real time; the song's Sa is detected from its vocals; A–B loop for repeating a phrase |
+| **Riyaz Games** | `/games` | Web Audio + Lehra engine clock | *Swar Pehchaan* (ear training: name the swar sung over a drone, 5 levels) and *Sam Pakdo* (rhythm: tap on sam while the real lehra plays, judged to the millisecond against the audio actually heard; 6 unlockable stages) |
 
 ---
 
@@ -183,7 +184,17 @@ The website is static files, so it runs on Vercel's free Hobby plan (no sleeping
 2. Leave every setting as it is — [`vercel.json`](vercel.json) already sets the build (`node tools/build-static.mjs`, output `dist`), the page links (`/lehra`, `/notation`, …) and caching.
 3. **Deploy.** Every push to `main` redeploys automatically.
 
-To check the build locally first: `node tools/build-static.mjs` (writes `dist/`). If you later run the separator server somewhere (e.g. Azure Container Apps), add a rewrite in `vercel.json` sending `/api/(.*)` to `https://<your-server>/api/$1` and both pages start working.
+To check the build locally first: `node tools/build-static.mjs` (writes `dist/`), then `python tools/dev_server.py 3001 dist` serves it the way Vercel will. If you later run the separator server somewhere (e.g. Azure Container Apps), add a rewrite in `vercel.json` sending `/api/(.*)` to `https://<your-server>/api/$1` and both pages start working.
+
+#### Search engines (SEO)
+The site is a single-page app, so on its own every route would answer with the home page's title and description. The static build fixes that for search engines and link previews:
+
+* **A page per route.** `tools/build-static.mjs` writes `/lehra`, `/notation`, `/carnatic`, `/games`, … as their own HTML files, each with its own `<title>`, meta description, canonical URL, Open Graph / Twitter tags and schema.org structured data, one `<h1>`, and that page's view already showing (no flash of the home page, and readable without JavaScript). The text for each page lives in one table, [`public/js/core/routes.js`](public/js/core/routes.js), which the browser uses too when you move between pages.
+* **`robots.txt` and `sitemap.xml`** are generated. The sitemap lists the indexable pages; `/practice` (it only makes sense with your own `?job=…`) is marked `noindex`, and so is the Stem Separator page until an `/api/` rewrite puts its server behind the site — then it is listed automatically.
+* **The site's address** for canonical URLs and the sitemap comes from Vercel itself (`VERCEL_PROJECT_PRODUCTION_URL`), so there is nothing to configure. If you add a custom domain and want that one to be canonical, set an environment variable **`SITE_URL`** (e.g. `https://swaralaya.in`) in the Vercel project and redeploy. A local build without either simply leaves the canonical URLs and the sitemap out.
+* Scripts are hinted with `modulepreload`, so the browser fetches the whole module graph at once.
+
+After the first deploy, add the site to [Google Search Console](https://search.google.com/search-console) and submit `https://<your-domain>/sitemap.xml`.
 
 ---
 
@@ -195,8 +206,15 @@ To check the build locally first: `node tools/build-static.mjs` (writes `dist/`)
 * **Seamless Tempo Modulations:** Change BPM via presets, slider, or **TAP** tempo. Crossfades seamlessly on the fly.
 * **Dynamic Tanpura:** Choose between classic acoustic loops or custom synthesized plucked models (Male C# / Female G#) with custom Pa, Ma, or Ni lead strings.
 * **Laya Trainer:** Programmatic tempo ramping across designated cycle increments.
-* **Riyaz Tracker & Streaks:** Tracks active playing time per local day with streak goals stored privately in `localStorage`.
+* **Raag Finder, Favourites & Recents:** One search box across the whole catalogue — type a raag, taal or instrument in any common spelling ("bageshri jhap", "tintal sitar") and pick with the keyboard. Star a raag to keep it as a chip above the lists; the ones you play are remembered too.
+* **Mini Player:** When the transport has scrolled out of view (on a phone it sits several screens down), a small bar at the bottom keeps play / stop, the raag and the current matra within reach.
+* **Keyboard Shortcuts:** Space, S, ↑ ↓ (Shift for ± 5 BPM), T, L, M, F, `/` to search and `?` for the list.
+* **Riyaz Tracker & Streaks:** Tracks active playing time per local day with streak goals stored privately in `localStorage` — with totals for the week and all time, and a "continue your riyaz" card on the home page that reopens your last setup.
 * **Studio FX:** Integrated dual-band shelving EQ (Bass & Treble) and dynamic convolution reverb.
+* **Taal Circle:** One avartan drawn as a chakra beside the Now Playing card — sam at the top, matras clockwise, vibhag dividers with their X / 2 / 0 / 3 markers, and the theka's bols inside the ring. A hand sweeps round it on the engine's own musical clock, so it stays locked to the audio through tempo changes.
+* **Share a Setup:** "Copy share link" in Presets makes a `/lehra#s=…` link that opens the exact instrument, taal, raag, tempo, Sa, volumes and options on any device — nothing is uploaded.
+* **Intonation Report:** Each Record riyaz take can be analysed (YIN, offline, on a microphone-only copy): a pitch graph over the swar lines, the share of held notes within ±20 cents, and which swaras drift sharp or flat. Glides aren't judged.
+* **Audio Export (MP3 / WAV):** Save the current raag, taal, instrument, tempo and Sa as a file of any length (minutes or whole cycles, ending on sam) — optionally with the tanpura and metronome. Rendered on the device with the playback engine's own DSP in a Web Worker (~70× real time), mixed through the same FX chain in an `OfflineAudioContext`, and encoded as 16-bit WAV or 192 kbps MP3 (LAME, loaded on demand and integrity-checked).
 
 ---
 
@@ -245,7 +263,7 @@ webapp/
 ├── public/                  # Static web client assets
 │   ├── css/                 # Glassmorphic responsive design system
 │   ├── js/                  # ES Modules (Zero bundler requirement)
-│   │   ├── core/            # AudioContext, master routing, mic, router
+│   │   ├── core/            # AudioContext, master routing, mic, router & page metadata, toasts, app install
 │   │   ├── lehra/           # Real-time WSOLA engine, worklet, player, tools
 │   │   ├── carnatic/        # Shruti & Talam metronome lookahead engines
 │   │   ├── notation/        # Score editor, synthesizer & Deflate share engine
@@ -256,6 +274,7 @@ webapp/
 ├── stem-frontend/           # Standalone Next.js 14 multitrack separator UI
 ├── assets/                  # High-quality audio cycles, tanpura plucks, metronome
 ├── tests/                   # Automated node:test unit suites & smoke shell tests
+├── tools/                   # dev_server.py, build-static.mjs (Vercel build) and seo.mjs (per-route pages, sitemap)
 ├── Dockerfile               # Multi-stage production container build
 └── docker-compose.yml       # Production/local runtime configuration
 ```

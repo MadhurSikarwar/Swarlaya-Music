@@ -123,9 +123,9 @@ void StaticController::getCatchAll(const drogon::HttpRequestPtr& req,
     // Only the website itself is public: these root files and public/
     // (assets/, separator/ and _next/ have their own routes). Everything else
     // in the app directory — sources, config, binaries, uploads — is not.
-    static const std::set<std::string> kRootFiles = {"sw.js", "manifest.json", "favicon.ico"};
+    static const std::set<std::string> kRootFiles = {"sw.js", "manifest.json", "favicon.ico", "robots.txt"};
     // Client-side routes handled by initNavigation() in public/js/core/navigation.js.
-    static const std::set<std::string> kSpaRoutes = {"lehra", "hindustani", "carnatic", "notation", "practice"};
+    static const std::set<std::string> kSpaRoutes = {"lehra", "hindustani", "carnatic", "notation", "practice", "games"};
 
     std::string path = req->path();
     std::string rel = path.empty() ? "" : (path[0] == '/' ? path.substr(1) : path);

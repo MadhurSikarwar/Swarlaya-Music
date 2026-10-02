@@ -14,7 +14,10 @@
  * engine's own musical clock (scheduler.js).
  */
 import { initControls } from './controls.js';
+import { initExport } from './export.js';
+import { initFinder } from './finder.js';
 import { initLayaTrainer } from './laya.js';
+import { initMiniPlayer } from './mini-player.js';
 import { initMixer } from './mixer.js';
 import { stopPlayback } from './player.js';
 import { initPracticeTimer } from './practice.js';
@@ -23,6 +26,7 @@ import { checkpointRiyaz, initRiyazGoal } from './riyaz.js';
 import { showMatraRow } from './scheduler.js';
 import { renderInstruments } from './selection.js';
 import { initSettings } from './settings.js';
+import { initTaalCircle } from './taal-circle.js';
 import { initTanpuraOptions } from './tanpura.js';
 import { state } from './state.js';
 import { showPlay, setStatus } from './ui.js';
@@ -34,11 +38,15 @@ export function initLehra() {
   initMixer();
   initControls();
   initWaveformCanvas();
+  initTaalCircle();
+  initFinder();
+  initMiniPlayer();
   initLayaTrainer();
   initPracticeTimer();
   initRiyazGoal();
   initTanpuraOptions();
   initRecorder();
+  initExport();
   showPlay();
   showMatraRow(false);
   setStatus('Ready — select a raag to begin', '');

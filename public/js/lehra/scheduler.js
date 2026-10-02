@@ -6,7 +6,7 @@
 import { $ } from '../core/dom.js';
 import { outputLatency } from '../core/audio-output.js';
 import { audio } from './audio.js';
-import { state } from './state.js';
+import { emit, state } from './state.js';
 import { scheduleMetronome } from './metronome.js';
 import { matraRole, thekaMatras } from './theka.js';
 
@@ -197,6 +197,7 @@ function renderTheka(taal) {
 }
 
 export function updateMatraDisplay(matra, total) {
+  emit('matra', matra, total);
   const el = $('matraCounter');
   if (!el) return;
   el.textContent = matra > 0 ? matra : '—';

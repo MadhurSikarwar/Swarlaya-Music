@@ -49,7 +49,7 @@ test('share links: compressed round trip, fallback format, hash parsing', async 
   assert.equal(shareFromHash(`#n=${z}`), z);
   assert.equal(shareFromHash('#other=1&n=abc_-9'), 'abc_-9');
   assert.equal(shareFromHash('#nothing'), null);
-  await assert.rejects(decodeShare('q123'), /Not a composition link/);
+  await assert.rejects(decodeShare('q123'), /Unrecognised link/);
 });
 
 test('library: saving a name again replaces it, newest first', () => {

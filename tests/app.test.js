@@ -8,7 +8,7 @@ import { CATALOGUE } from '../public/js/lehra/catalogue.js';
 import { layaTempo } from '../public/js/lehra/laya.js';
 import { attackOffset } from '../public/js/lehra/metronome.js';
 import { extensionFor, pickMimeType, syncDelay, takeFileName } from '../public/js/lehra/recorder.js';
-import { matraRole, thekaMatras, thekaVibhags, vibhagMarkers } from '../public/js/lehra/theka.js';
+import { matraRole, taalCycle, thekaMatras, thekaVibhags, vibhagMarkers } from '../public/js/lehra/theka.js';
 import { parseSettings, upsertPreset, removePreset, presetSummary, SETTINGS_VERSION } from '../public/js/lehra/settings.js';
 
 test('riyaz is logged against the local calendar day', () => {
@@ -95,6 +95,28 @@ test('vibhag markers and matra roles (incl. a two-cycle loop)', () => {
   const loop = thekaMatras(double);
   assert.deepEqual(loop.filter(m => m.marker).map(m => `${m.matra}${m.marker}`), ['10', '41', '62', '80', '111', '132']);
   assert.equal(loop[7].bol, 'Tin');
+});
+
+test('taal circle: one avartan with roles, vibhag markers and bols', () => {
+  const teen = taalCycle(CATALOGUE.Sarangi.taals['Teentaal (16 beats)']);
+  assert.equal(teen.length, 16);
+  assert.equal(teen.matras.length, 16);
+  assert.deepEqual(teen.matras.filter(m => m.marker).map(m => `${m.matra}${m.marker}`), ['1X', '52', '90', '133']);
+  assert.deepEqual([1, 2, 5, 9, 13].map(m => teen.matras[m - 1].role), ['sam', null, 'taali', 'khali', 'taali']);
+  assert.deepEqual(teen.matras.slice(0, 4).map(m => m.bol), ['Dha', 'Dhin', 'Dhin', 'Dha']);
+
+  // A two-cycle loop is drawn as ONE avartan: 14 loop beats → 7 matras
+  const double = taalCycle(CATALOGUE.Esraj.taals['Roopak Double Cycle (14 beats)']);
+  assert.equal(double.length, 7);
+  assert.deepEqual(double.matras.filter(m => m.marker).map(m => `${m.matra}${m.marker}`), ['10', '41', '62']);
+  assert.equal(double.matras[0].role, 'sam', 'sam even though it is khali in Roopak');
+  assert.equal(double.matras[0].bol, 'Tin');
+
+  // No theka, no taali/khali: just numbered matras from sam
+  const rare = taalCycle(CATALOGUE.Sitar.taals['Sunand Taal (19 beats)']);
+  assert.equal(rare.length, 19);
+  assert.ok(rare.matras.every(m => m.bol === ''));
+  assert.deepEqual(rare.matras.filter(m => m.marker).map(m => `${m.matra}${m.marker}`), ['1X']);
 });
 
 test('laya trainer ramps every N cycles and stops at the target', () => {

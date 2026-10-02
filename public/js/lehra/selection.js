@@ -10,12 +10,21 @@ import { updateNowPlaying } from './visuals.js';
 const SLIDER_STEPS = 210;
 
 // ── Catalogue ──────────────────────────────────────────────────────
+/** Highlight the chosen button of a list — and say so to assistive technology. */
+function markSelected(listId, btn) {
+  $(listId).querySelectorAll('.selector-btn').forEach(b => {
+    b.classList.toggle('active', b === btn);
+    b.setAttribute('aria-pressed', String(b === btn));
+  });
+}
+
 export function renderInstruments() {
   const list = $('instrumentList');
   list.innerHTML = '';
   Object.entries(CATALOGUE).forEach(([name, data]) => {
     const btn = document.createElement('button');
     btn.className = 'selector-btn';
+    btn.setAttribute('aria-pressed', 'false');
     btn.dataset.name = name;
     const tc = Object.keys(data.taals).length;
     btn.innerHTML = `<span>${name}</span><span class="btn-badge">${tc} taal${tc !== 1 ? 's' : ''}</span>`;
@@ -27,8 +36,7 @@ export function renderInstruments() {
 function selectInstrument(name, btn) {
   state.instrument = name;
   state.taal = null; state.taalData = null; state.raag = null;
-  document.querySelectorAll('#instrumentList .selector-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  markSelected('instrumentList', btn);
   renderTaals();
   $('raagList').innerHTML = '<p class="empty-hint">← Select a taal first</p>';
   clearTempoPanel();
@@ -45,6 +53,7 @@ function renderTaals() {
   Object.entries(CATALOGUE[state.instrument].taals).forEach(([name, data]) => {
     const btn = document.createElement('button');
     btn.className = 'selector-btn';
+    btn.setAttribute('aria-pressed', 'false');
     btn.dataset.name = name;
     btn.innerHTML = `<span>${name}</span><span class="btn-badge">${data.beats} beats</span>`;
     btn.addEventListener('click', () => selectTaal(name, data, btn));
@@ -54,8 +63,7 @@ function renderTaals() {
 
 function selectTaal(name, data, btn) {
   state.taal = name; state.taalData = data; state.raag = null;
-  document.querySelectorAll('#taalList .selector-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  markSelected('taalList', btn);
   renderRaags(data.raags);
   clearTempoPanel();
   renderBeatDots(data.beats);
@@ -71,6 +79,7 @@ function renderRaags(raags) {
   Object.keys(raags).forEach(name => {
     const btn = document.createElement('button');
     btn.className = 'selector-btn';
+    btn.setAttribute('aria-pressed', 'false');
     btn.dataset.name = name;
     btn.textContent = name;
     btn.addEventListener('click', () => selectRaag(name, btn));
@@ -80,8 +89,7 @@ function renderRaags(raags) {
 
 function selectRaag(name, btn) {
   state.raag = name;
-  document.querySelectorAll('#raagList .selector-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  markSelected('raagList', btn);
   // Keep the current tempo, clamped to this taal's range (as the app does in
   // calculationForInstrumentRecord), so switching raag mid-riyaz doesn't jump.
   setBpm(state.bpm);
