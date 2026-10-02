@@ -42,6 +42,50 @@ function setMeta(html, attr, key, value) {
 const jsonLd = data =>
   `<script type="application/ld+json">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>`;
 
+/**
+ * FAQ structured data keyed by route path.
+ * Rendered as FAQPage JSON-LD so Google can show rich results.
+ */
+const PAGE_FAQS = {
+  '/': [
+    { q: 'What is Swaralaya?', a: 'Swaralaya is a free, browser-based practice tool suite for Indian classical music. It includes a lehra player, tanpura drone, Carnatic shruti box and talam keeper, Bhatkhande notation editor, swar tuner, and ear-training games.' },
+    { q: 'Is Swaralaya free to use?', a: 'Yes. All tools on Swaralaya are completely free with no sign-up required. An optional account lets you sync your riyaz progress across devices.' },
+    { q: 'Do I need to install anything?', a: 'No. Swaralaya works entirely in your browser on any device. No download or installation is needed.' },
+    { q: 'What instruments does the lehra player support?', a: 'The lehra player includes recordings of sarangi, harmonium, sitar and esraj at any tempo and Sa.' },
+  ],
+  '/lehra': [
+    { q: 'What is a lehra player?', a: 'A lehra player provides a repeating melodic loop in a fixed taal used by tabla and Kathak students for riyaz. Swaralaya offers lehra in Teentaal, Jhaptaal, Ektaal, Roopak and many other taals.' },
+    { q: 'Can I change the tempo and pitch of the lehra?', a: 'Yes. You can change the tempo (BPM) and transpose the Sa live without restarting playback.' },
+    { q: 'Can I export the lehra as an MP3?', a: 'Yes. Swaralaya can export the lehra as an MP3 file at any duration you choose.' },
+  ],
+  '/carnatic': [
+    { q: 'What Carnatic talas are available?', a: 'Swaralaya supports Adi tala, Rupaka, Misra Chapu, Khanda Chapu and all 35 suladi talas with kalai and nadai options.' },
+    { q: 'What is a kattai?', a: 'Kattai is the pitch position in Carnatic music to set the shruti box or tanpura. Swaralaya supports all 12 kattais.' },
+  ],
+  '/notation': [
+    { q: 'What notation systems does the editor support?', a: 'The notation editor supports both Bhatkhande and Paluskar notation systems for tabla and vocal compositions, in English or Hindi.' },
+    { q: 'Can I share or export my notation?', a: 'Yes. You can export your composition as a PDF and share it with others via a link.' },
+  ],
+  '/games': [
+    { q: 'What is Swar Pehchaan?', a: 'Swar Pehchaan is an ear-training game where you listen to a swar sung against a Sa drone and identify it by name.' },
+    { q: 'What is Sam Pakdo?', a: 'Sam Pakdo is a rhythm timing game where you tap exactly on the sam (first beat) of a taal to improve your laya.' },
+  ],
+};
+
+function faqStructuredData(route) {
+  const faqs = PAGE_FAQS[route.path];
+  if (!faqs) return null;
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faqs.map(({ q, a }) => ({
+      '@type': 'Question',
+      name: q,
+      acceptedAnswer: { '@type': 'Answer', text: a },
+    })),
+  };
+}
+
 /** schema.org data for a route: the site and app on the home page, a page with its breadcrumb elsewhere. */
 export function structuredData(route, siteUrl) {
   const url = siteUrl + route.path;
@@ -133,6 +177,8 @@ export function renderPage(html, route, { siteUrl = '', preload = [] } = {}) {
     if (indexable) {
       head.push(`<link rel="canonical" href="${escapeAttr(siteUrl + route.path)}" />`);
       head.push(jsonLd(structuredData(route, siteUrl)));
+      const faq = faqStructuredData(route);
+      if (faq) head.push(jsonLd(faq));
     }
   }
   for (const href of preload) head.push(`<link rel="modulepreload" href="${escapeAttr(href)}" />`);
@@ -187,7 +233,8 @@ export function sitemapPaths({ separatorLive = false } = {}) {
 }
 
 export function sitemapXml(siteUrl, paths) {
-  const urls = paths.map(p => `  <url><loc>${escapeAttr(siteUrl + p)}</loc></url>`).join('\n');
+  const today = new Date().toISOString().slice(0, 10);
+  const urls = paths.map(p => `  <url><loc>${escapeAttr(siteUrl + p)}</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq></url>`).join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
 }
 
