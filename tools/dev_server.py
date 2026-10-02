@@ -75,7 +75,7 @@ class Handler(SimpleHTTPRequestHandler):
             # A static build has a page per route; the source tree has the one index.html
             page = os.path.join(ROOT, rel.rstrip('/'), 'index.html')
             return page if os.path.isfile(page) else os.path.join(ROOT, 'index.html')
-        if rel in ROOT_FILES:
+        if rel in ROOT_FILES or (rel.startswith('google') and rel.endswith('.html')):
             return os.path.join(ROOT, rel)
         sep = os.path.join(ROOT, 'public', 'separator')
         if not os.path.isdir(sep):

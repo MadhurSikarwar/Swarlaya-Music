@@ -59,6 +59,11 @@ mkdirSync(out, { recursive: true });
 for (const file of ['sw.js', 'manifest.json', 'favicon.ico']) {
   cpSync(join(root, file), join(out, file));
 }
+for (const file of readdirSync(root)) {
+  if (/^google[a-z0-9]+\.html$/i.test(file)) {
+    cpSync(join(root, file), join(out, file));
+  }
+}
 cpSync(join(root, 'assets'), join(out, 'assets'), { recursive: true });
 cpSync(join(root, 'public'), join(out, 'public'), {
   recursive: true,
