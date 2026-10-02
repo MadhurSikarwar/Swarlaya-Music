@@ -42,6 +42,12 @@ export const ROUTES = [
     description: 'Two games for your ear and your laya: Swar Pehchaan, where you name the swar sung against a Sa drone, and Sam Pakdo, where you tap exactly on sam.',
   },
   {
+    // Personal: a visitor's own numbers and their account
+    path: '/account', view: 'view-account', name: 'Your Progress', index: false,
+    title: 'Your Progress | Swaralaya',
+    description: 'Your riyaz time and game scores, and an optional account to keep them across devices.',
+  },
+  {
     path: '/practice', view: 'view-practice', name: 'Practise Along', index: false,
     title: 'Practise Along | Swaralaya',
     description: 'Play the accompaniment of a separated song at your own Sa and tempo.',

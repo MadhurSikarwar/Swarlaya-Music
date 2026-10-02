@@ -196,6 +196,21 @@ The site is a single-page app, so on its own every route would answer with the h
 
 After the first deploy, add the site to [Google Search Console](https://search.google.com/search-console) and submit `https://<your-domain>/sitemap.xml`.
 
+#### Accounts (optional): sign in with Google
+The **Your Progress** page (`/account`) shows a visitor's riyaz time and game scores. With accounts switched on it also offers **Continue with Google**, which backs those up and keeps them in step across the person's devices. It runs on [Firebase](https://firebase.google.com) straight from the browser — no server — so it works on Vercel, and its free tier is far more than this needs. Until you set it up the site simply has no sign-in and everything stays on the device.
+
+1. **Create the project.** [console.firebase.google.com](https://console.firebase.google.com) → *Add project* (Google Analytics isn't needed).
+2. **Switch on Google sign-in.** *Build → Authentication → Get started → Sign-in method → Google → Enable*, choose a support email, *Save*.
+3. **Allow your site.** *Authentication → Settings → Authorized domains → Add domain* and enter your Vercel domain (`localhost` is already there for local testing).
+4. **Create the database.** *Build → Firestore Database → Create database* (production mode, any region near your users). Then open its *Rules* tab, paste the contents of [`firestore.rules`](firestore.rules) and *Publish* — they let each user read and write only their own document.
+5. **Copy the config.** *Project settings (the gear) → Your apps → Web (`</>`)*, register an app (no Firebase Hosting), and copy the `firebaseConfig` object it shows into [`public/js/account/config.js`](public/js/account/config.js) as `FIREBASE_CONFIG`. This config identifies the project and is meant to be public; access is controlled by the sign-in and the rules above.
+6. **Deploy.** Commit and push; the Your Progress page now shows the Google button.
+
+What an account stores is one document per user: practice seconds per day (kept per device, so two devices never double-count), the daily goal, and game scores. A signed-in user can delete it from the page ("Delete synced data"). The Firebase SDK is loaded from Google's CDN only for people who sign in.
+
+#### Guided tour
+Every page has a step-by-step tour ("Take a tour of this page" in the footer; offered once to a first-time visitor). The spotlight is [Driver.js](https://driverjs.com), loaded from the jsDelivr CDN on demand and checked against a pinned hash. The steps live in [`public/js/core/tour.js`](public/js/core/tour.js) — add a line there when you add a control worth explaining.
+
 ---
 
 ## 🎛️ Core Features
@@ -269,6 +284,7 @@ webapp/
 │   │   ├── notation/        # Score editor, synthesizer & Deflate share engine
 │   │   ├── tuner/           # YIN AudioWorklet pitch tracker
 │   │   ├── practice/        # Song mode accompaniment engine
+│   │   ├── account/         # Your Progress page; optional Google sign-in + sync (Firebase)
 │   │   └── main.js          # App lifecycle initialization
 │   └── separator/           # Pre-compiled static export of stem-frontend
 ├── stem-frontend/           # Standalone Next.js 14 multitrack separator UI

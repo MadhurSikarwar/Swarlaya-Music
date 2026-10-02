@@ -1,0 +1,17 @@
+// Cloud Firestore security rules for Swaralaya accounts.
+//
+// Each signed-in user has one document, users/{their uid}, holding their
+// practice time per day, daily goal and game scores (public/js/account/sync.js).
+// Only that user may read or write it; nothing else in the database is
+// reachable.
+//
+// Paste this into the Firebase console (Firestore Database → Rules → Publish),
+// or deploy it with the Firebase CLI.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}

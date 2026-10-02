@@ -163,6 +163,7 @@ function initTransport() {
     // They control the lehra only while its page is showing (and no dialog is open) —
     // and never take a browser shortcut (Ctrl+S, Alt+←, …).
     if (!$('view-lehra')?.classList.contains('active-view') || document.body.classList.contains('modal-open')) return;
+    if (document.body.classList.contains('driver-active')) return; // a guided tour has the keyboard
     if (e.ctrlKey || e.metaKey || e.altKey) return;
 
     // Space on a focused button, link or summary presses that control instead.

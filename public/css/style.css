@@ -3466,3 +3466,170 @@ body.has-mini-player .site-footer { padding-bottom: 104px; }
   .finder-chip { padding: 8px 14px; }
   .fav-btn { width: 40px; height: 40px; margin: -10px 0; }
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   Your Progress / account (public/js/account/)
+   ══════════════════════════════════════════════════════════════════ */
+.account-panel {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+}
+.account-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.account-stats .stat-tile { padding: 14px 8px; }
+.account-stats .stat-tile-value { font-size: 1.15rem; }
+.account-days { margin: 14px 0 0; text-align: center; }
+.account-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.account-box {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.account-state { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+.account-state .modal-hint { margin-bottom: 0; }
+.account-loading { flex-direction: row; align-items: center; font-size: 0.84rem; color: var(--text-sub); }
+.spinner {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(245,166,35,0.25);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* "Continue with Google": Google's own light button, as its guidelines ask */
+.btn-google {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 18px 10px 14px;
+  border: 1px solid #dadce0;
+  border-radius: 22px;
+  background: #ffffff;
+  color: #1f1f1f;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: box-shadow var(--transition), transform var(--transition);
+}
+.btn-google:hover { box-shadow: 0 2px 14px rgba(255,255,255,0.18); transform: translateY(-1px); }
+.btn-google:active { transform: scale(0.98); }
+.btn-google:disabled { opacity: 0.6; cursor: default; transform: none; }
+
+.account-user { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.account-photo {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border-gold);
+  border-radius: 50%;
+  object-fit: cover;
+}
+.account-initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-active);
+  color: var(--gold);
+  font-family: 'Cinzel', serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+.account-who { min-width: 0; }
+.account-name { font-size: 0.95rem; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+.account-email { font-size: 0.78rem; color: var(--text-sub); overflow-wrap: anywhere; }
+.account-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.account-danger:hover { color: #ff8f8f; border-color: rgba(255,107,107,0.4); background: rgba(255,107,107,0.08); }
+.account-error { margin: 0 0 14px; color: #ffb4a8; }
+/* Signed in: the header button says so */
+#accountBtn.active { box-shadow: 0 0 0 2px rgba(74,222,128,0.35); }
+
+@media (max-width: 520px) {
+  .account-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Guided tour (public/js/core/tour.js) — Driver.js, in the site's colours
+   ══════════════════════════════════════════════════════════════════ */
+.driver-popover.swaralaya-tour {
+  max-width: min(330px, calc(100vw - 24px));
+  padding: 18px;
+  border: 1px solid var(--border-gold);
+  border-radius: 14px;
+  background: linear-gradient(160deg, #1e160a, #0d0b08);
+  box-shadow: 0 0 40px rgba(245,166,35,0.14), 0 18px 48px rgba(0,0,0,0.65);
+  color: var(--text-primary);
+  font-family: 'Outfit', 'Inter', sans-serif;
+}
+.swaralaya-tour .driver-popover-title {
+  padding-right: 22px;
+  font-family: 'Cinzel', serif;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--gold);
+}
+.swaralaya-tour .driver-popover-description {
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--text-primary);
+}
+.swaralaya-tour .driver-popover-progress-text { font-size: 0.72rem; color: var(--text-sub); }
+.swaralaya-tour .driver-popover-footer-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border-gold);
+  border-radius: 8px;
+  background: rgba(245,166,35,0.08);
+  color: var(--gold);
+  font-family: inherit;
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-shadow: none;
+}
+.swaralaya-tour .driver-popover-footer-btn:hover,
+.swaralaya-tour .driver-popover-footer-btn:focus { background: rgba(245,166,35,0.18); }
+.swaralaya-tour .driver-popover-footer-btn:focus-visible { box-shadow: var(--focus-ring); }
+.swaralaya-tour .driver-popover-close-btn { color: var(--text-sub); }
+.swaralaya-tour .driver-popover-close-btn:hover,
+.swaralaya-tour .driver-popover-close-btn:focus { color: var(--gold); }
+/* The arrow takes the popover's colour on the side it points from */
+.swaralaya-tour .driver-popover-arrow-side-left { border-left-color: #17110a; }
+.swaralaya-tour .driver-popover-arrow-side-right { border-right-color: #17110a; }
+.swaralaya-tour .driver-popover-arrow-side-top { border-top-color: #17110a; }
+.swaralaya-tour .driver-popover-arrow-side-bottom { border-bottom-color: #17110a; }
+
+/* First visit: the offer to take the tour */
+.tour-offer {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 70;
+  width: min(320px, calc(100% - 32px));
+  padding: 16px;
+  border: 1px solid var(--border-gold);
+  border-radius: 14px;
+  background: rgba(24,18,9,0.97);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6), 0 0 30px rgba(245,166,35,0.1);
+  animation: offerIn 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes offerIn {
+  from { opacity: 0; transform: translateY(14px); }
+}
+.tour-offer p { font-size: 0.86rem; line-height: 1.5; color: var(--text-primary); }
+.tour-offer-actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+body.has-mini-player .tour-offer { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 84px); }
+body.fullscreen-mode .tour-offer { display: none; }

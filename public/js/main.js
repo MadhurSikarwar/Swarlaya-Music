@@ -10,11 +10,14 @@
  *   practice/   practise along with a separated song (Lehra engine, song mode)
  *   games/      riyaz games: Swar Pehchaan (ear), Sam Pakdo (laya)
  *   tuner/      swar tuner (microphone pitch detection)
+ *   account/    Your Progress page; optional Google sign-in to sync practice and scores
  */
+import { initAccount } from './account/index.js';
 import { carnaticSa, initCarnatic, stopAll as stopCarnatic } from './carnatic/index.js';
 import { initModals } from './core/modals.js';
 import { initNavigation, onEnterView, onLeaveView } from './core/navigation.js';
 import { initPwa } from './core/pwa.js';
+import { initTour } from './core/tour.js';
 import { initGames, leaveGames } from './games/index.js';
 import { initLehra, leaveLehra } from './lehra/index.js';
 import { renderResumeCard } from './lehra/resume.js';
@@ -38,6 +41,7 @@ registerTunerReference('view-practice', () => ({ sa: practiceSa(), system: 'hind
 initTuner();
 initModals();
 initPwa();
+initAccount();
 
 // The home page's "continue your riyaz" card: the lehra setup and today's practice
 renderResumeCard();
@@ -51,6 +55,7 @@ onLeaveView(leavePractice);
 onLeaveView(leaveGames);
 
 initNavigation();
+initTour();              // "Take a tour of this page", offered once to a first-time visitor
 openSharedComposition(); // a composition link (#n=…) opens in the Notation Editor
 openSharedSetup();       // a Lehra setup link (#s=…) opens in the Lehra player
 // …also when one is opened in a tab that's already on the site (only the #hash changes)

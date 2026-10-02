@@ -5,8 +5,8 @@
   "buildCommand": "node tools/build-static.mjs",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/:page(lehra|hindustani|carnatic|notation|practice|games)", "destination": "/:page/index.html" },
-    { "source": "/:page(lehra|hindustani|carnatic|notation|practice|games)/", "destination": "/:page/index.html" },
+    { "source": "/:page(lehra|hindustani|carnatic|notation|practice|games|account)", "destination": "/:page/index.html" },
+    { "source": "/:page(lehra|hindustani|carnatic|notation|practice|games|account)/", "destination": "/:page/index.html" },
     { "source": "/separator", "destination": "/separator/index.html" }
   ],
   "headers": [
@@ -18,7 +18,7 @@
       ]
     },
     {
-      "source": "/practice",
+      "source": "/(practice|account)",
       "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
     },
     {

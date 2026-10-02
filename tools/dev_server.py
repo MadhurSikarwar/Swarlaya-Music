@@ -28,7 +28,7 @@ from urllib.parse import unquote, urlsplit
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # webapp/
 ROOT_FILES = {'sw.js', 'manifest.json', 'favicon.ico', 'robots.txt', 'sitemap.xml'}  # sitemap: static build only
-SPA_ROUTES = {'lehra', 'hindustani', 'carnatic', 'notation', 'practice', 'games'}
+SPA_ROUTES = {'lehra', 'hindustani', 'carnatic', 'notation', 'practice', 'games', 'account'}
 TYPES = {  # explicit: Windows' registry maps some of these oddly (e.g. .aac)
     '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
     '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.txt': 'text/plain; charset=utf-8',
@@ -128,7 +128,9 @@ def main():
         ROOT = os.path.abspath(sys.argv[2])
         if not os.path.isfile(os.path.join(ROOT, 'index.html')):
             sys.exit(f'{ROOT} has no index.html — build it first: node tools/build-static.mjs')
-    os.chdir(ROOT)
+        # (not made the working directory: Windows couldn't replace the folder on the next build)
+    else:
+        os.chdir(ROOT)
     handler = lambda *a: Handler(*a, directory=ROOT)  # noqa: E731
     try:
         httpd = ThreadingHTTPServer(('127.0.0.1', port), handler)

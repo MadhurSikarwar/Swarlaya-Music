@@ -1,11 +1,19 @@
 /**
  * Riyaz (practice) tracker: seconds played per local day, kept in
  * localStorage, with a daily goal and the streak of days that met it.
+ *
+ * The log is this device's own. With an account (js/account/), the time
+ * practised on the user's other devices arrives as a second per-day map and
+ * is added in — so each device only ever writes its own numbers and nothing
+ * is counted twice.
  */
 import { $ } from '../core/dom.js';
-import { state } from './state.js';
+import { emit, state } from './state.js';
 
+const DAY_KEY = /^lehra_riyaz_(\d{4}-\d{2}-\d{2})$/;
 const GOAL_KEY = 'lehra_riyaz_goal_min';
+const GOAL_AT_KEY = 'lehra_riyaz_goal_at';    // when the goal was chosen (ms): the later choice wins between devices
+const OTHERS_KEY = 'lehra_riyaz_others_v1';   // { 'YYYY-MM-DD': seconds on the user's other devices }
 export const DEFAULT_GOAL_MIN = 15;
 
 // Practice is logged against the local calendar day (toISOString() would use
@@ -16,22 +24,80 @@ export function localDateKey(d) {
   return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
+/** Seconds logged on this device on day `d`. */
 function savedSeconds(d) {
   return parseInt(localStorage.getItem(`lehra_riyaz_${localDateKey(d)}`) || '0', 10) || 0;
 }
 
-/** Seconds practised on day `d`, including the session still running today. */
-function secondsOn(d) {
-  let secs = savedSeconds(d);
-  if (state.isPlaying && state.riyazStart > 0 && localDateKey(d) === localDateKey(new Date())) {
-    secs += Math.max(0, Math.round((Date.now() - state.riyazStart) / 1000));
+let others = null; // parsed OTHERS_KEY, read once
+/** Seconds per day practised on the user's other devices ({} without an account). */
+function otherDevices() {
+  if (others === null) {
+    others = {};
+    try {
+      const raw = JSON.parse(localStorage.getItem(OTHERS_KEY) || '{}');
+      for (const [day, secs] of Object.entries(raw && typeof raw === 'object' ? raw : {})) {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(day) && secs > 0) others[day] = Math.round(secs);
+      }
+    } catch { /* storage unavailable or corrupt: this device's log alone */ }
   }
-  return secs;
+  return others;
+}
+
+/** The session still running today, in seconds (0 when nothing plays). */
+function runningSeconds() {
+  return state.isPlaying && state.riyazStart > 0 ? Math.max(0, Math.round((Date.now() - state.riyazStart) / 1000)) : 0;
+}
+
+/** Seconds practised on day `d` — every device, and the session still running today. */
+function secondsOn(d) {
+  const day = localDateKey(d);
+  return savedSeconds(d) + (otherDevices()[day] || 0) + (day === localDateKey(new Date()) ? runningSeconds() : 0);
 }
 
 export function goalMinutes() {
   const v = parseInt(localStorage.getItem(GOAL_KEY), 10);
   return v > 0 ? v : DEFAULT_GOAL_MIN;
+}
+
+// ── For the account sync (js/account/) ─────────────────────────────
+/** This device's own log: { 'YYYY-MM-DD': seconds }. */
+export function riyazLog() {
+  const log = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const day = DAY_KEY.exec(localStorage.key(i))?.[1];
+      const secs = day ? parseInt(localStorage.getItem(localStorage.key(i)), 10) || 0 : 0;
+      if (secs > 0) log[day] = secs;
+    }
+  } catch { /* storage unavailable */ }
+  return log;
+}
+
+/** Replace what the user's other devices have logged (an empty map clears it). */
+export function setRiyazOthers(map) {
+  others = null;
+  try {
+    if (map && Object.keys(map).length) localStorage.setItem(OTHERS_KEY, JSON.stringify(map));
+    else localStorage.removeItem(OTHERS_KEY);
+  } catch { /* storage unavailable */ }
+}
+
+/** The daily goal and when it was chosen: { min, at } (at = 0 if never chosen here). */
+export function riyazGoal() {
+  let at = 0;
+  try { at = parseInt(localStorage.getItem(GOAL_AT_KEY), 10) || 0; } catch { /* storage unavailable */ }
+  return { min: goalMinutes(), at };
+}
+
+/** Adopt a goal chosen on another device. */
+export function setRiyazGoal(min, at) {
+  try {
+    localStorage.setItem(GOAL_KEY, String(min));
+    localStorage.setItem(GOAL_AT_KEY, String(at));
+  } catch { /* storage unavailable */ }
+  const input = $('statsGoalInput');
+  if (input) input.value = min;
 }
 
 /**
@@ -56,6 +122,7 @@ function saveRiyazTime(seconds) {
   const key = `lehra_riyaz_${localDateKey(new Date())}`;
   const current = parseInt(localStorage.getItem(key) || '0', 10);
   localStorage.setItem(key, current + seconds);
+  emit('riyaz');
 }
 
 /** End the current session and log it. */
@@ -85,16 +152,17 @@ export function formatPractice(secs) {
 
 /**
  * All-time practice from the per-day log: { total, days } in seconds and
- * days practised. `entries` = [[storage key, value], …].
+ * days practised. `entries` = [[storage key, value], …] is this device's
+ * log; `elsewhere` = { day: seconds } what other devices add to it.
  */
-export function riyazTotals(entries) {
-  let total = 0, days = 0;
+export function riyazTotals(entries, elsewhere = {}) {
+  const perDay = { ...elsewhere };
   for (const [key, value] of entries) {
-    if (!/^lehra_riyaz_\d{4}-\d{2}-\d{2}$/.test(key)) continue;
-    const secs = parseInt(value, 10) || 0;
-    if (secs > 0) { total += secs; days++; }
+    const day = DAY_KEY.exec(key)?.[1];
+    if (day) perDay[day] = (perDay[day] || 0) + (parseInt(value, 10) || 0);
   }
-  return { total, days };
+  const practised = Object.values(perDay).filter(secs => secs > 0);
+  return { total: practised.reduce((sum, secs) => sum + secs, 0), days: practised.length };
 }
 
 /** Practice so far — today, the last 7 days and all time — with the goal and streak. */
@@ -112,12 +180,12 @@ export function riyazSummary(now = new Date()) {
     stored = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
       .map(key => [key, localStorage.getItem(key)]);
   } catch { /* storage unavailable */ }
-  let { total, days } = riyazTotals(stored);
+  let { total, days } = riyazTotals(stored, otherDevices());
   // …plus the session still running, which isn't in the log yet
-  const running = today - savedSeconds(now);
+  const running = runningSeconds();
   if (running > 0) {
     total += running;
-    if (savedSeconds(now) === 0) days++;
+    if (today === running) days++; // nothing else logged today
   }
   return { today, week, total, days, goalSecs, streak: riyazStreak(secondsOn, goalSecs, now) };
 }
@@ -187,7 +255,11 @@ export function initRiyazGoal() {
   input.addEventListener('change', () => {
     const v = Math.max(1, Math.min(600, parseInt(input.value, 10) || DEFAULT_GOAL_MIN));
     input.value = v;
-    try { localStorage.setItem(GOAL_KEY, String(v)); } catch { /* storage unavailable */ }
+    try {
+      localStorage.setItem(GOAL_KEY, String(v));
+      localStorage.setItem(GOAL_AT_KEY, String(Date.now()));
+    } catch { /* storage unavailable */ }
+    emit('riyaz');
     renderStats();
   });
 }

@@ -29,7 +29,7 @@ expect_type() { # expect_type <path> <content-type substring>
 }
 
 echo "== website"
-for path in / /index.html /lehra /hindustani /carnatic /notation /practice /games /sw.js /manifest.json /favicon.ico /robots.txt \
+for path in / /index.html /lehra /hindustani /carnatic /notation /practice /games /account /sw.js /manifest.json /favicon.ico /robots.txt \
             /public/css/style.css /public/icons/icon-192.png /separator/ \
             /assets/Metronome.aac /assets/tanpura_06_01.wav; do
   expect 200 "$path"

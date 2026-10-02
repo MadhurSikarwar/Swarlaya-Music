@@ -16,6 +16,7 @@ const VIEW_PATHS = {
   'view-notation': '/notation',
   'view-practice': '/practice',
   'view-games': '/games',
+  'view-account': '/account',
 };
 
 const PATH_VIEWS = {
@@ -25,6 +26,7 @@ const PATH_VIEWS = {
   notation: ['view-notation', 'hindustani'],
   practice: ['view-practice', 'stem'],
   games: ['view-games', 'games'],
+  account: ['view-account', null],
 };
 
 const leaveHooks = [];
