@@ -52,11 +52,17 @@ const PAGE_FAQS = {
     { q: 'Is Swaralaya free to use?', a: 'Yes. All tools on Swaralaya are completely free with no sign-up required. An optional account lets you sync your riyaz progress across devices.' },
     { q: 'Do I need to install anything?', a: 'No. Swaralaya works entirely in your browser on any device. No download or installation is needed.' },
     { q: 'What instruments does the lehra player support?', a: 'The lehra player includes recordings of sarangi, harmonium, sitar and esraj at any tempo and Sa.' },
+    { q: 'Can I use Swaralaya for tabla practice?', a: 'Yes. The lehra player provides tabla practice accompaniment in Teentaal, Jhaptaal, Ektaal, Roopak and many other taals. You can set any tempo and Sa.' },
+    { q: 'Is there an online tanpura drone?', a: 'Yes. Swaralaya has a continuous tanpura drone for both Hindustani and Carnatic practice, at any pitch.' },
+    { q: 'Can I practise Kathak with Swaralaya?', a: 'Yes. The lehra player is ideal for Kathak riyaz, with all major taals at any tempo, plus a metronome with sam, taali and khali accents.' },
   ],
   '/lehra': [
     { q: 'What is a lehra player?', a: 'A lehra player provides a repeating melodic loop in a fixed taal used by tabla and Kathak students for riyaz. Swaralaya offers lehra in Teentaal, Jhaptaal, Ektaal, Roopak and many other taals.' },
     { q: 'Can I change the tempo and pitch of the lehra?', a: 'Yes. You can change the tempo (BPM) and transpose the Sa live without restarting playback.' },
     { q: 'Can I export the lehra as an MP3?', a: 'Yes. Swaralaya can export the lehra as an MP3 file at any duration you choose.' },
+    { q: 'Which taals are supported in the lehra player?', a: 'Teentaal (16 beats), Jhaptaal (10), Ektaal (12), Roopak (7), Dadra (6), Keherwa (8), Tilwada (16), Dhamaar (14), Ashtamangal (8) and more.' },
+    { q: 'Can I use the lehra player for Kathak practice?', a: 'Yes. The lehra player is widely used for Kathak riyaz. Choose your taal, set your tempo, and add a tanpura drone.' },
+    { q: 'Is there an online tabla practice accompaniment?', a: 'Yes. The lehra player provides melodic accompaniment for tabla practice in all major taals at any tempo you need.' },
   ],
   '/carnatic': [
     { q: 'What Carnatic talas are available?', a: 'Swaralaya supports Adi tala, Rupaka, Misra Chapu, Khanda Chapu and all 35 suladi talas with kalai and nadai options.' },

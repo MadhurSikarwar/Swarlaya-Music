@@ -13,33 +13,33 @@ export const SITE_NAME = 'Swaralaya';
 export const ROUTES = [
   {
     path: '/', view: 'view-home', name: 'Home',
-    title: 'Swaralaya — Indian Classical Music Practice Tools',
-    description: 'Free practice tools for Indian classical music: lehra player with tanpura, Carnatic shruti box and talam, notation editor, swar tuner and ear-training games.',
+    title: 'Swaralaya — Free Indian Classical Music Practice Tools Online',
+    description: 'Free online tools for Indian classical music riyaz: tabla practice lehra, tanpura, Carnatic shruti box, Bhatkhande notation, swar ear training and laya games.',
   },
   {
     path: '/hindustani', view: 'view-hindustani', name: 'Hindustani',
-    title: 'Hindustani Practice Suite: Lehra & Notation | Swaralaya',
-    description: 'Tools for Hindustani riyaz: a lehra player on sarangi, harmonium, sitar and esraj at any tempo, a Bhatkhande notation editor, and practising along with songs.',
+    title: 'Hindustani Riyaz: Tabla Lehra, Notation & Tanpura | Swaralaya',
+    description: 'Hindustani riyaz tools: online lehra for tabla and Kathak practice on sarangi, harmonium, sitar and esraj; Bhatkhande and Paluskar notation editor; tanpura.',
   },
   {
     path: '/lehra', view: 'view-lehra', name: 'Lehra Player', crumbs: ['/hindustani'],
-    title: 'Online Lehra Player: Sarangi, Harmonium, Sitar, Esraj | Swaralaya',
-    description: 'Play lehra for tabla and Kathak riyaz in Teentaal, Jhaptaal, Ektaal, Roopak and rarer taals. Change tempo and Sa live, add tanpura and metronome, export MP3.',
+    title: 'Online Lehra Player for Tabla & Kathak Practice | Swaralaya',
+    description: 'Free lehra player for tabla riyaz: Teentaal, Jhaptaal, Ektaal, Roopak and more, on sarangi, harmonium, sitar or esraj. Change tempo and Sa live, export MP3.',
   },
   {
     path: '/notation', view: 'view-notation', name: 'Notation Editor', crumbs: ['/hindustani'],
-    title: 'Bhatkhande Notation Editor for Tabla & Vocal | Swaralaya',
-    description: 'Write tabla and vocal compositions in Bhatkhande or Paluskar notation, in English or Hindi. Play them back, export a PDF and share them by link, for free.',
+    title: 'Bhatkhande & Paluskar Notation Editor — Tabla | Swaralaya',
+    description: 'Write tabla and vocal compositions in Bhatkhande or Paluskar notation, in English or Hindi. Play them back, export as PDF and share by link. Free online.',
   },
   {
     path: '/carnatic', view: 'view-carnatic', name: 'Carnatic',
-    title: 'Carnatic Shruti Box & Talam Metronome | Swaralaya',
-    description: 'A Carnatic practice suite: a tanpura or reed shruti box at any kattai, and a talam keeper for Adi, Rupaka, chapu and suladi talas with kalai and nadai.',
+    title: 'Online Carnatic Shruti Box, Tanpura & Talam Keeper | Swaralaya',
+    description: 'Free Carnatic practice tools: shruti box and tanpura at any kattai, plus talam keeper for Adi, Rupaka, Misra Chapu, Khanda Chapu and all 35 suladi talas with kalai and nadai.',
   },
   {
     path: '/games', view: 'view-games', name: 'Riyaz Games',
-    title: 'Riyaz Games: Swar Ear Training & Sam Timing | Swaralaya',
-    description: 'Two games for your ear and your laya: Swar Pehchaan, where you name the swar sung against a Sa drone, and Sam Pakdo, where you tap exactly on sam.',
+    title: 'Indian Classical Music Ear Training & Laya Games | Swaralaya',
+    description: 'Two free games for riyaz: Swar Pehchaan (identify swars by ear against a Sa drone) and Sam Pakdo (tap exactly on sam). Build swar recognition and tabla timing skills.',
   },
   {
     // Personal: a visitor's own numbers and their account
