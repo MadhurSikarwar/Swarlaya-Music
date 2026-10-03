@@ -60,7 +60,7 @@ const PAGE_FAQS = {
     { q: 'What is a lehra player?', a: 'A lehra player provides a repeating melodic loop in a fixed taal used by tabla and Kathak students for riyaz. Swaralaya offers lehra in Teentaal, Jhaptaal, Ektaal, Roopak and many other taals.' },
     { q: 'Can I change the tempo and pitch of the lehra?', a: 'Yes. You can change the tempo (BPM) and transpose the Sa live without restarting playback.' },
     { q: 'Can I export the lehra as an MP3?', a: 'Yes. Swaralaya can export the lehra as an MP3 file at any duration you choose.' },
-    { q: 'Which taals are supported in the lehra player?', a: 'Teentaal (16 beats), Jhaptaal (10), Ektaal (12), Roopak (7), Dadra (6), Keherwa (8), Tilwada (16), Dhamaar (14), Ashtamangal (8) and more.' },
+    { q: 'Which taals are supported in the lehra player?', a: 'Teentaal (16 beats), Jhaptaal (10), Ektaal (12), Roopak (7), Dhamar (14) and Sool Taal (10), plus rarer taals such as Jai Taal, Rudra Taal, Pancham Sawari, Neel Taal and Sunand Taal.' },
     { q: 'Can I use the lehra player for Kathak practice?', a: 'Yes. The lehra player is widely used for Kathak riyaz. Choose your taal, set your tempo, and add a tanpura drone.' },
     { q: 'Is there an online tabla practice accompaniment?', a: 'Yes. The lehra player provides melodic accompaniment for tabla practice in all major taals at any tempo you need.' },
   ],

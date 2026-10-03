@@ -140,7 +140,7 @@ test('the static build publishes the website only, with everything the offline c
     assert.ok(!existsSync(join(out, 'sitemap.xml')));
     assert.equal(built('robots.txt'), robotsTxt(''));
     assert.equal(canonicalOf(built('lehra/index.html')), undefined);
-    assert.equal(titleOf(built('lehra/index.html')), ROUTES.find(r => r.path === '/lehra').title);
+    assert.equal(titleOf(built('lehra/index.html')), ROUTES.find(r => r.path === '/lehra').title.replace(/&/g, '&amp;'));
     for (const p of ['public/separator', 'drogon_server', 'tests', 'tools', 'stem-frontend', 'uploads',
       'README.md', 'Dockerfile', 'package.json']) {
       assert.ok(!existsSync(join(out, p)), `${p} is not published`);

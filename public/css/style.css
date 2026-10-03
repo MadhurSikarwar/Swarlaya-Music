@@ -3633,3 +3633,42 @@ body.has-mini-player .site-footer { padding-bottom: 104px; }
 .tour-offer-actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
 body.has-mini-player .tour-offer { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 84px); }
 body.fullscreen-mode .tour-offer { display: none; }
+
+/* ── Home: what each tool does ── */
+.features-summary {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0.5rem 1.5rem 2rem;
+}
+.features-title {
+  margin-bottom: 1.1rem;
+  font-family: 'Cinzel', serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+  color: var(--text-primary);
+}
+.features-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+  list-style: none;
+}
+.features-list li {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--text-sub);
+}
+.features-list strong { display: block; margin-bottom: 2px; color: var(--gold); font-weight: 600; }
+@media (max-width: 760px) {
+  .features-list { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .features-summary { padding: 0 0 1rem; }
+}

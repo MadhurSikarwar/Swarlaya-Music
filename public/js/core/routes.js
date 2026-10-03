@@ -34,12 +34,12 @@ export const ROUTES = [
   {
     path: '/carnatic', view: 'view-carnatic', name: 'Carnatic',
     title: 'Online Carnatic Shruti Box, Tanpura & Talam Keeper | Swaralaya',
-    description: 'Free Carnatic practice tools: shruti box and tanpura at any kattai, plus talam keeper for Adi, Rupaka, Misra Chapu, Khanda Chapu and all 35 suladi talas with kalai and nadai.',
+    description: 'Free Carnatic practice tools: shruti box and tanpura at any kattai, plus talam keeper for Adi, Rupaka, Misra Chapu and all 35 suladi talas with kalai and nadai.',
   },
   {
     path: '/games', view: 'view-games', name: 'Riyaz Games',
     title: 'Indian Classical Music Ear Training & Laya Games | Swaralaya',
-    description: 'Two free games for riyaz: Swar Pehchaan (identify swars by ear against a Sa drone) and Sam Pakdo (tap exactly on sam). Build swar recognition and tabla timing skills.',
+    description: 'Two free riyaz games: Swar Pehchaan (identify swars by ear against a Sa drone) and Sam Pakdo (tap exactly on sam). Build swar recognition and laya.',
   },
   {
     // Personal: a visitor's own numbers and their account
