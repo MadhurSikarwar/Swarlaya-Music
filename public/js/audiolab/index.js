@@ -16,7 +16,6 @@
  * it, it says so and the rest of the site is unaffected.
  */
 import { $, trackSliderFill } from '../core/dom.js';
-import { onEnterView } from '../core/navigation.js';
 import { toast } from '../core/toast.js';
 import * as api from './api.js';
 import { createBatch } from './batch.js';
@@ -953,14 +952,14 @@ export function initAudioLab() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
   $('alabPlay').disabled = true;
+}
 
-  onEnterView(async view => {
-    if (view !== 'view-audio') return;
-    if (!state.searched) await findServer();
-    resume();
-    setTimeout(() => {
-      if (state.player && state.report) state.player.redraw();
-      if (state.prep) state.prep.redraw();
-    }, 50);
-  });
+/** The page is showing (main.js calls this; it loads this module the first time the page opens). */
+export async function enterAudioLab() {
+  if (!state.searched) await findServer();
+  resume();
+  setTimeout(() => {
+    if (state.player && state.report) state.player.redraw();
+    if (state.prep) state.prep.redraw();
+  }, 50);
 }

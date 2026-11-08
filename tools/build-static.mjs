@@ -72,13 +72,15 @@ cpSync(join(root, 'public'), join(out, 'public'), {
 });
 cpSync(separatorSrc, join(out, 'separator'), { recursive: true });
 
-// A page per route
+// A page per route. The Audio Lab is imported on demand (main.js), so only its
+// own page hints its modules; that page still fetches them all in one go.
 const page = readFileSync(join(root, 'index.html'), 'utf8');
 const preload = moduleGraph('public/js/main.js');
+const lazy = { 'view-audio': moduleGraph('public/js/audiolab/index.js').filter(u => !preload.includes(u)) };
 for (const route of ROUTES) {
   const dir = route.path === '/' ? out : join(out, route.path.slice(1));
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, 'index.html'), renderPage(page, route, { siteUrl, preload }));
+  writeFileSync(join(dir, 'index.html'), renderPage(page, route, { siteUrl, preload: [...preload, ...(lazy[route.view] || [])] }));
 }
 const separatorPage = join(out, 'separator', 'index.html');
 writeFileSync(separatorPage, renderSeparatorPage(readFileSync(separatorPage, 'utf8'), { siteUrl, live: separatorLive }));

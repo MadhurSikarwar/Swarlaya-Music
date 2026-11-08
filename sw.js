@@ -1,8 +1,9 @@
 // ── Caching strategy ─────────────────────────────────────────────────────────
 // Pages, scripts and styles are NETWORK-FIRST: a deploy reaches visitors on
 // their next load, and the cache only serves them when offline.
-// Media under /assets/ (lehra .aac files, tanpura, metronome) is CACHE-FIRST:
-// those files are large and never change in place.
+// Media under /assets/ (lehra .aac files, tanpura, metronome) and the fonts
+// under /public/fonts/ are CACHE-FIRST: they never change in place (a new
+// font gets a new file name).
 //
 // The cache name is a hash of the precache list + CONTENT_VERSION. Bump
 // CONTENT_VERSION only if a file under /assets/ is replaced in place;
@@ -99,6 +100,8 @@ const ASSETS = [
   './public/js/vendor/vercel-blob-client.js',
   './public/icons/icon.svg',
   './public/icons/icon-192.png',
+  './public/fonts/outfit-v15-latin.woff2',
+  './public/fonts/cinzel-v26-latin.woff2',
   './assets/Metronome.aac',
   './assets/MetronomeUp.aac',
   './assets/tanpura_06_01.wav'
@@ -168,7 +171,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  if (url.pathname.startsWith('/assets/')) {
+  if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/public/fonts/')) {
     event.respondWith(cacheFirst(request));
   } else {
     event.respondWith(networkFirst(request));

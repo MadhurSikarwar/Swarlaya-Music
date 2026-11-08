@@ -130,7 +130,13 @@ test('every element the script looks up exists once in the Audio Lab view', () =
 
 test('the page is wired in without disturbing the other views', () => {
   const main = read('public/js/main.js');
-  assert.ok(main.includes("from './audiolab/index.js'") && main.includes('initAudioLab();') && main.includes('onLeaveView(leaveAudioLab)'));
+  // a quarter of the site's script: loaded the first time its page shows, never by the other pages
+  assert.ok(!/from '\.\/audiolab\//.test(main), 'main.js does not import the Audio Lab statically');
+  assert.ok(main.includes("import('./audiolab/index.js')"), 'main.js loads it on demand');
+  for (const fn of ['initAudioLab()', 'enterAudioLab()', 'leaveAudioLab()']) assert.ok(main.includes(fn), fn);
+  const lab = read('public/js/audiolab/index.js');
+  assert.ok(/export (async )?function enterAudioLab\(/.test(lab) && !lab.includes('onEnterView('),
+    'main.js, not the module, says when the page is entered (the module loads after the first entry)');
   const sw = read('sw.js');
   for (const f of readdirSync(join(root, 'public/js/audiolab'))) assert.ok(sw.includes(`./public/js/audiolab/${f}`), `${f} is precached`);
   // the stylesheet's Audio Lab rules are all prefixed, so no existing rule can be affected

@@ -40,6 +40,45 @@ def test_loudness_agrees_between_pyloudnorm_and_ffmpeg(tmp_path):
     assert abs(ours - theirs) < 0.1
 
 
+def _signals():
+    """Recordings of awkward shapes: shorter than a block, across block edges, quiet, loud, mono, a single frame."""
+    rng = np.random.default_rng(7)
+    tabla = synth.make_tabla(9)
+    yield "tabla", tabla
+    yield "tabla, quiet passage", np.concatenate([tabla, tabla[: 3 * SR] * 0.001, tabla[: 2 * SR]]).astype(np.float32)
+    yield "noise across block edges", (rng.standard_normal((P._OS_BLOCK * 2 + 37, 2)) * 0.3).astype(np.float32)
+    yield "short", (rng.standard_normal((501, 2)) * 0.5).astype(np.float32)
+    yield "one frame", np.array([[0.5, -0.25]], dtype=np.float32)
+    yield "mono", tabla[:, :1].copy()
+    yield "silence", np.zeros((SR, 2), np.float32)
+
+
+def test_the_true_peak_scan_is_resample_polys_4x_oversampling():
+    from scipy.signal import resample_poly
+    for name, x in _signals():
+        up = resample_poly(x, 4, 1, axis=0)
+        want = np.abs(up).max(axis=1).reshape(len(x), 4).max(axis=1)
+        got = P.oversampled_peaks(x)
+        assert got.shape == want.shape, name
+        np.testing.assert_allclose(got, want, rtol=0, atol=1e-6, err_msg=name)
+
+
+def test_the_loudness_meter_is_pyloudnorms():
+    import pyloudnorm as pyln
+    for name, x in _signals():
+        if len(x) < 0.45 * SR:
+            continue
+        try:
+            want = pyln.Meter(SR).integrated_loudness(x.astype(np.float64))
+        except ValueError:
+            want = -math.inf
+        got = P.measure_lufs(x)
+        if math.isfinite(want):
+            assert got == pytest.approx(want, abs=1e-6), name
+        else:
+            assert got == -math.inf, name
+
+
 def test_true_peak_sees_what_the_sample_peak_misses():
     n = SR
     t = np.arange(n)

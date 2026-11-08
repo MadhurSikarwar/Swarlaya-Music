@@ -234,6 +234,12 @@ test('service worker: pages/scripts network-first, audio cache-first, offline fa
   await sw.fetchVia('/assets/Esraj_Teentaal_Sohini.aac');
   assert.equal(sw.net.hits.length, 1, 'audio fetched once');
 
+  // the site's own fonts never change in place (a new font gets a new name): cache-first too
+  sw.net.hits = [];
+  await sw.fetchVia('/public/fonts/outfit-v15-latin-ext.woff2');
+  await sw.fetchVia('/public/fonts/outfit-v15-latin-ext.woff2');
+  assert.equal(sw.net.hits.length, 1, 'font fetched once');
+
   const missing = await sw.fetchVia('/missing.js');
   assert.equal(missing.status, 404);
   assert.equal(await sw.caches.match(ORIGIN + '/missing.js'), undefined, 'errors are not cached');
@@ -258,6 +264,11 @@ test('service worker precaches only files that exist — and every site module',
   const root = new URL('../public/js/', import.meta.url);
   const modules = readdirSync(root, { recursive: true }).filter(f => f.endsWith('.js')).map(f => `./public/js/${f.replaceAll('\\', '/')}`);
   for (const m of modules) assert.ok(list.includes(m), `${m} is precached`);
+  // …and the fonts the page preloads, so it looks the same offline
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const fonts = [...html.matchAll(/<link rel="preload" href="([^"]+\.woff2)"/g)].map(m => `.${m[1]}`);
+  assert.equal(fonts.length, 2);
+  for (const f of fonts) assert.ok(list.includes(f), `${f} is precached`);
   // …but not the optional tanpura string samples (loaded only when chosen)
   assert.ok(!list.some(p => /tn\dstr/.test(p)));
 });

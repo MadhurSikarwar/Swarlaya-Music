@@ -27,6 +27,7 @@ Conventions
 """
 from __future__ import annotations
 
+import functools
 import importlib.util
 import json
 import math
@@ -575,16 +576,55 @@ def decode_audio(path: Path, sr: int = SR) -> np.ndarray:
 
 # ── Measurements ─────────────────────────────────────────────────────────────
 
+@functools.lru_cache(maxsize=4)
+def _k_weighting(sr: int) -> np.ndarray:
+    """pyloudnorm's own K-weighting stages for this rate, as one cascade of second-order sections."""
+    import pyloudnorm as pyln
+    return np.array([np.concatenate([f.passband_gain * np.asarray(f.b, dtype=np.float64), f.a])
+                     for f in pyln.Meter(sr)._filters.values()])
+
+
+_LUFS_GAINS = (1.0, 1.0, 1.0, 1.41, 1.41)      # BS.1770 channel weights: L, R, C, Ls, Rs
+
+
 def measure_lufs(x: np.ndarray, sr: int = SR) -> float:
-    """Integrated loudness (ITU-R BS.1770-4, gated).  −inf for silence."""
+    """Integrated loudness (ITU-R BS.1770-4, gated).  −inf for silence.
+
+    pyloudnorm's meter step for step (its filters, block bounds and gates; a test holds the two to
+    1e-6 LU), with its two filter passes run as one cascade and its per-block Python loop as one
+    array operation: the pipeline measures loudness dozens of times per run.
+    """
     if len(x) < int(0.45 * sr):
         ms = float(np.mean(x.astype(np.float64) ** 2) * x.shape[1]) if len(x) else 0.0
         return -0.691 + 10 * math.log10(ms) if ms > 0 else -math.inf
-    import pyloudnorm as pyln
-    try:
-        v = float(pyln.Meter(sr).integrated_loudness(x.astype(np.float64)))
-    except ValueError:
+    x = x[:, None] if x.ndim == 1 else x
+    n, channels = x.shape
+    if channels > len(_LUFS_GAINS):
         return -math.inf
+    y = sps.sosfilt(_k_weighting(sr), np.ascontiguousarray(x.T, dtype=np.float64), axis=1)    # (channels, frames)
+    t_g, step = 0.400, 1.0 - 0.75                  # 400 ms blocks, 75 % overlap
+    blocks = int(np.round((n / sr - t_g) / (t_g * step))) + 1
+    j = np.arange(blocks)
+    lo = np.minimum((t_g * (j * step) * sr).astype(np.int64), n)
+    hi = np.minimum((t_g * (j * step + 1) * sr).astype(np.int64), n)
+    sq = np.zeros((channels, n + 1))               # the extra zero lets the last bound be a valid index
+    np.square(y, out=sq[:, :n])
+    bounds = np.empty(2 * blocks, dtype=np.int64)
+    bounds[0::2], bounds[1::2] = lo, hi
+    sums = np.add.reduceat(sq, bounds, axis=1)[:, 0::2]          # sq[lo:hi] per block (odd slots are gaps)
+    sums[:, lo >= hi] = 0.0
+    z = (1.0 / (t_g * sr)) * sums
+    g = np.array(_LUFS_GAINS[:channels])[:, None]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        level = -0.691 + 10.0 * np.log10((g * z).sum(axis=0))
+        gated = level >= -70.0                     # the absolute gate
+        if not gated.any():
+            return -math.inf
+        relative = -0.691 + 10.0 * np.log10((g[:, 0] * z[:, gated].mean(axis=1)).sum()) - 10.0
+        gated = (level > relative) & (level > -70.0)
+        if not gated.any():
+            return -math.inf
+        v = float(-0.691 + 10.0 * np.log10((g[:, 0] * z[:, gated].mean(axis=1)).sum()))
     return v if math.isfinite(v) else -math.inf
 
 
@@ -592,27 +632,52 @@ def sample_peak_db(x: np.ndarray) -> float:
     return db(np.max(np.abs(x))) if len(x) else -200.0
 
 
-_OS_BLOCK = 1 << 16      # frames per block of the oversampled peak scan
-_OS_PAD = 64             # context each side: more than resample_poly's filter reaches (10 input samples)
+_OS_BLOCK = 1 << 15      # frames per block of the oversampled peak scan (small enough to stay in the CPU cache)
+_OS_TAPS = 10            # input samples each side that resample_poly's 4× filter reaches
+
+
+@functools.lru_cache(maxsize=1)
+def _os_phases() -> np.ndarray:
+    """The filter resample_poly(x, 4, 1) designs for float32 input, split into its four phases (rows).
+
+    Output sample 4q + p of the oversampled signal is phase p's 21 taps run over input samples
+    q − 10 … q + 10, so each phase is an ordinary short convolution.
+    """
+    h =sps.firwin(2 * 4 * _OS_TAPS + 1, 1.0 / 4, window=("kaiser", 5.0)).astype(np.float32) * 4
+    k = np.zeros((4, 2 * _OS_TAPS + 1), dtype=np.float32)
+    for p in range(4):
+        for d in range(-_OS_TAPS, _OS_TAPS + 1):
+            i = 4 * d + p + 4 * _OS_TAPS
+            if 0 <= i < len(h):
+                k[p, d + _OS_TAPS] = h[i]
+    return k
 
 
 def oversampled_peaks(x: np.ndarray) -> np.ndarray:
     """Per frame, the largest |sample| of the 4×-oversampled signal over all channels.
 
-    Worked out in blocks with a margin on each side, so it is the same as
-    oversampling the whole recording at once but needs memory for one block
-    instead of four copies of the recording (a 3-minute stereo upload at 4×
-    is ~280 MB per copy).
+    The same numbers as resample_poly(x, 4, 1) over the whole recording (a test holds them to 1e-6),
+    worked out phase by phase in blocks: about 4× faster, and memory for one block instead of four
+    copies of the recording.  Phase 0 is the input itself (its other taps are ~1e-17), scaled by its
+    centre tap; phases 1–3 are 21-tap convolutions.  The true peak is measured dozens of times per
+    run (the limiter, every check), so this was the slowest step of a master.
     """
+    from scipy.ndimage import convolve1d
     n = len(x)
-    x = x.astype(np.float32, copy=False)
-    env = np.empty(n, dtype=np.float32)
+    if not n:
+        return np.zeros(0, dtype=np.float32)
+    k = _os_phases()
+    xt = np.ascontiguousarray(np.asarray(x, dtype=np.float32).T)       # (channels, frames)
+    env = np.abs(xt).max(axis=0) * k[0, _OS_TAPS]
+    buf = np.empty((xt.shape[0], min(n, _OS_BLOCK + 2 * _OS_TAPS)), dtype=np.float32)
     for a in range(0, n, _OS_BLOCK):
         b = min(n, a + _OS_BLOCK)
-        lo, hi = max(0, a - _OS_PAD), min(n, b + _OS_PAD)
-        up = sps.resample_poly(x[lo:hi], 4, 1, axis=0)
-        peaks = np.abs(up).max(axis=1).reshape(hi - lo, 4).max(axis=1)
-        env[a:b] = peaks[a - lo:a - lo + (b - a)]
+        lo, hi = max(0, a - _OS_TAPS), min(n, b + _OS_TAPS)
+        seg, out, e = xt[:, lo:hi], buf[:, :hi - lo], env[a:b]
+        for p in (1, 2, 3):
+            convolve1d(seg, k[p], axis=1, mode="constant", cval=0.0, output=out)
+            np.abs(out, out=out)
+            np.maximum(e, out[:, a - lo:b - lo].max(axis=0), out=e)
     return env
 
 
@@ -1332,9 +1397,10 @@ def master(mix: np.ndarray, target_lufs: float, variant: str, opts: JobOptions,
     tp = true_peak_db(y, sr)
     if tp > ceiling_db:                      # last resort: a plain trim
         y = (y * from_db(ceiling_db - tp - 0.01)).astype(np.float32)
+        lufs, tp = measure_lufs(y, sr), true_peak_db(y, sr)
     return y, {
         "gain_db": gain, "iterations": len(history), "limiter_reduction_db": reduction,
-        "lufs": measure_lufs(y, sr), "true_peak_db": true_peak_db(y, sr),
+        "lufs": lufs, "true_peak_db": tp,
     }
 
 
@@ -2324,6 +2390,8 @@ def run_pipeline(spec: JobSpec, progress: ProgressFn = _noop_progress, *, lead: 
             ceiling = TRUE_PEAK_CEILING_DBTP
             for lossy_try in range(3):
                 y, minfo = master(mix, target, name, opts, ceiling_db=ceiling, strength=strength)
+                if lossy_try:
+                    minfo["lossy_ceiling_db"] = ceiling          # lowered because the MP3/AAC went over
                 result = _check_variant(name, y, minfo, out, baseline, in_duration, target, allowance)
                 if not result["ok"]:
                     break
@@ -2331,7 +2399,6 @@ def run_pipeline(spec: JobSpec, progress: ProgressFn = _noop_progress, *, lead: 
                 if overshoot <= 0.0 or lossy_try == 2:
                     break
                 ceiling -= overshoot + 0.05
-                minfo["lossy_ceiling_db"] = ceiling
             if result["ok"] or attempt == len(EQ_STRENGTHS):
                 result["entry"]["attempt"] = attempt
                 result["entry"]["eq_strength"] = strength

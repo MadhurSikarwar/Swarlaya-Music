@@ -105,6 +105,13 @@ test('the static build bakes a page per route for search engines', () => {
       const preloads = [...html.matchAll(/<link rel="modulepreload" href="([^"]*)"/g)].map(m => m[1]);
       assert.ok(preloads.includes('/public/js/main.js') && preloads.includes('/public/js/lehra/engine.js'));
       for (const p of preloads) assert.ok(existsSync(join(out, p)), `preloaded ${p} exists`);
+      // the Audio Lab's modules only on its own page, where all of them are hinted
+      const lab = preloads.filter(p => p.startsWith('/public/js/audiolab/'));
+      if (r.path === '/audio') {
+        for (const p of ['index.js', 'sync-editor.js', 'serverless.js', 'prepare.js']) assert.ok(lab.includes(`/public/js/audiolab/${p}`), `/audio preloads ${p}`);
+      } else {
+        assert.deepEqual(lab, [], `${r.path} does not preload the Audio Lab`);
+      }
     }
     assert.ok(existsSync(join(out, 'public/icons/og-image.png')));
 

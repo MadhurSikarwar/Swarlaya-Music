@@ -11,14 +11,15 @@
  *   games/      riyaz games: Swar Pehchaan (ear), Sam Pakdo (laya)
  *   tuner/      swar tuner (microphone pitch detection)
  *   account/    Your Progress page; optional Google sign-in to sync practice and scores
- *   audiolab/   Audio Lab: clean up, mix and master a tabla / lehra recording (server-side, audio_lab/)
+ *   audiolab/   Audio Lab: clean up, mix and master a tabla / lehra recording (server-side, audio_lab/);
+ *               loaded the first time its page shows (see loadAudioLab below)
  */
 import { initAccount } from './account/index.js';
-import { initAudioLab, leaveAudioLab } from './audiolab/index.js';
 import { carnaticSa, initCarnatic, stopAll as stopCarnatic } from './carnatic/index.js';
 import { initModals } from './core/modals.js';
-import { initNavigation, onEnterView, onLeaveView } from './core/navigation.js';
+import { currentView, initNavigation, onEnterView, onLeaveView } from './core/navigation.js';
 import { initPwa } from './core/pwa.js';
+import { toast } from './core/toast.js';
 import { initTour } from './core/tour.js';
 import { initGames, leaveGames } from './games/index.js';
 import { initLehra, leaveLehra } from './lehra/index.js';
@@ -34,7 +35,25 @@ initNotationStudio();
 initCarnatic();
 initPractice();
 initGames();
-initAudioLab();
+
+// The Audio Lab is about a quarter of the site's script and only its own page
+// uses it, so the other pages never download it. (Its own page preloads it;
+// see tools/build-static.mjs.)
+let audioLab = null;
+function loadAudioLab() {
+  audioLab ||= import('./audiolab/index.js')
+    .then(lab => { lab.initAudioLab(); return lab; })
+    .catch(err => {
+      audioLab = null;                     // try again next time the page is opened
+      toast('The Audio Lab could not load. Check your connection and open it again.');
+      throw err;
+    });
+  return audioLab;
+}
+onEnterView(view => {
+  if (view !== 'view-audio') return;
+  loadAudioLab().then(lab => { if (currentView() === 'view-audio') lab.enterAudioLab(); }, () => {});
+});
 
 // The tuner measures against the Lehra's Sa on the Hindustani pages.
 const lehraSa = () => ({ sa: lehraState.pitchHz, system: 'hindustani' });
@@ -56,7 +75,7 @@ onLeaveView(stopNotationPlayback);
 onLeaveView(stopCarnatic);
 onLeaveView(leavePractice);
 onLeaveView(leaveGames);
-onLeaveView(leaveAudioLab);
+onLeaveView(() => { if (audioLab) audioLab.then(lab => lab.leaveAudioLab(), () => {}); });
 
 initNavigation();
 initTour();              // "Take a tour of this page", offered once to a first-time visitor
