@@ -206,6 +206,22 @@ def _line(obj: dict) -> bytes:
     return (json.dumps(obj, separators=(",", ":")) + "\n").encode("utf-8")
 
 
+def _worker_env() -> dict:
+    """The worker's environment. Vercel's Python runtime adds the function's packages to sys.path at
+    start-up instead of installing them in site-packages, so a child Python sees none of them unless
+    this process's sys.path is handed over as PYTHONPATH."""
+    paths = [p for p in sys.path if p] + [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p]
+    return dict(os.environ, PYTHONUNBUFFERED="1", PYTHONPATH=os.pathsep.join(dict.fromkeys(paths)))
+
+
+def _log_worker(work: Path, why: str) -> None:
+    """Puts the end of the worker's own output in the function log (the work folder is deleted after)."""
+    print(f"audio-lab worker failed: {why}", file=sys.stderr)
+    log = work / "worker.log"
+    if log.exists():
+        print(log.read_text(encoding="utf-8", errors="replace")[-4000:], file=sys.stderr)
+
+
 def _kept_seconds(duration: float, options: dict) -> float:
     start = float(options.get("trim_start") or 0.0)
     end = options.get("trim_end")
@@ -274,7 +290,7 @@ async def _work(req: dict):
         spec.update(options=req["options"], display_name=req["name"], mode=req["mode"], lead=req["lead"],
                     require_pass=req["require_pass"])
         (work / "job.json").write_text(json.dumps(spec), encoding="utf-8")
-        env = dict(os.environ, PYTHONUNBUFFERED="1")
+        env = _worker_env()
         with (work / "worker.log").open("wb") as log:              # the child keeps its own copy of the handle
             proc = subprocess.Popen([sys.executable, str(WORKER), str(work)], stdout=subprocess.PIPE, stderr=log,
                                     stdin=subprocess.DEVNULL, cwd=str(work), env=env)
@@ -311,6 +327,7 @@ async def _work(req: dict):
                 final = msg
         await asyncio.to_thread(proc.wait)
         if not final or final["type"] != "done" or proc.returncode != 0:
+            _log_worker(work, f"exit code {proc.returncode}, last message {final and final.get('type')!r}")
             if final and final["type"] == "error":
                 raise AudioLabError(final["code"], final["message"], 500)
             raise AudioLabError("crashed", "Processing stopped unexpectedly (the server may have run out of memory). "
@@ -336,10 +353,7 @@ async def _work(req: dict):
     except AudioLabError as e:
         yield _line({"type": "error", "code": e.code, "message": e.message})
     except Exception as e:                                       # noqa: BLE001 — the page shows a plain message
-        print(f"audio-lab run failed: {e!r}", file=sys.stderr)
-        log = work / "worker.log"
-        if log.exists():
-            print(log.read_text(encoding="utf-8", errors="replace")[-4000:], file=sys.stderr)
+        _log_worker(work, repr(e))
         yield _line({"type": "error", "code": "internal", "message": "Something went wrong on the server. Please try again."})
     finally:
         if proc and proc.poll() is None:

@@ -6,8 +6,10 @@ Run from webapp/:   python -m pytest audio_lab/tests/test_serverless.py -q
 """
 import io
 import json
+import os
 import shutil
 import subprocess
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -236,6 +238,16 @@ def test_cleanup_deletes_only_old_files(client, monkeypatch):
     assert client.get("/api/master/cleanup").status_code == 401
     r = client.get("/api/master/cleanup", headers={"Authorization": "Bearer s3cret"})
     assert r.json() == {"deleted": 1} and fake.deleted == ["audio-lab/a/in/tabla.wav"]
+
+
+def test_the_worker_sees_the_same_packages(monkeypatch):
+    # Vercel's Python runtime puts the function's packages on sys.path at start-up (no site-packages),
+    # so a plain `python worker.py` child could not import numpy and died at once: pass the path on.
+    monkeypatch.setattr(sys, "path", ["", "/var/task/_vendor", "/var/task"])
+    monkeypatch.setenv("PYTHONPATH", "/already/set")
+    env = S._worker_env()
+    assert env["PYTHONPATH"].split(os.pathsep) == ["/var/task/_vendor", "/var/task", "/already/set"]
+    assert env["PYTHONUNBUFFERED"] == "1"
 
 
 def test_vercel_config_matches_the_function():
