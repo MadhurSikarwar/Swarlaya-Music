@@ -324,6 +324,7 @@ test('the Vercel config routes the Audio Lab without touching the static site', 
   const cfg = JSON.parse(read('vercel.json'));
   assert.deepEqual(cfg.rewrites.at(-1), { source: '/api/master/:op', destination: '/api/master?op=:op' });
   assert.equal(cfg.functions['api/master.py'].maxDuration, 300);
+  assert.ok(cfg.functions['api/master.py'].excludeFiles.length <= 256, 'Vercel rejects an excludeFiles longer than 256 characters');
   assert.equal(cfg.buildCommand, 'node tools/build-static.mjs');
   assert.equal(cfg.outputDirectory, 'dist');
   const pkg = JSON.parse(read('package.json'));

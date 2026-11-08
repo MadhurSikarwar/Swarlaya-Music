@@ -7,7 +7,7 @@
   "functions": {
     "api/master.py": {
       "maxDuration": 300,
-      "excludeFiles": "{public/**,assets/*.aac,assets/tn*.wav,stem-frontend/**,drogon_server/**,tests/**,tools/**,dist/**,node_modules/**,separated/**,uploads/**,audio_cache/**,audio_lab/tests/**,audio_lab/data/**,.github/**,*.html,*.md,sw.js,manifest.json,favicon.ico,package-lock.json,Dockerfile,docker-compose.yml,render.yaml,requirements.txt}"
+      "excludeFiles": "{assets/*.aac,assets/tn*.wav,public/**,dist/**,node_modules/**,stem-frontend/**,drogon_server/**,tests/**,tools/**,audio_lab/tests/**,.github/**,uploads/**,separated/**,audio_cache/**,*.html,*.md}"
     },
     "api/master-upload.js": { "maxDuration": 15 }
   },

@@ -247,6 +247,7 @@ def test_vercel_config_matches_the_function():
     assert (root / "api" / "master.py").exists() and (root / "api" / "master-upload.js").exists()
     excluded = cfg["functions"]["api/master.py"]["excludeFiles"]
     assert "assets/*.aac" in excluded and "assets/**" not in excluded            # the tanpura stays in the bundle
+    assert len(excluded) <= 256                                                  # Vercel's schema rejects a longer excludeFiles
     import tomllib
     deps = {d.split("==")[0] for d in tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]["dependencies"]}
     assert {"imageio-ffmpeg", "vercel-blob", "starlette", "librosa", "pedalboard"} <= deps
