@@ -18,6 +18,10 @@ const EXTENSIONS = new Set(['wav', 'mp3', 'm4a', 'aac', 'flac', 'ogg', 'oga', 'o
   'avi', 'aif', 'aiff', 'wma', 'caf']);
 const PATHNAME = /^audio-lab\/[0-9a-f]{32}\/in\/(tabla|lehra|reference|recorder|vocal)(?:-[0-9a-f]{8})?\.([a-z0-9]{1,5})$/;
 const VALID_MS = 30 * 60 * 1000;
+// handleUploadPresigned insists on a webhook public key, but only reads it to verify
+// "blob.upload-completed" callbacks. This function never asks for one (no onUploadCompleted)
+// and refuses that event below, so the key is never used; a new Blob store doesn't set it.
+const UNUSED_WEBHOOK_KEY = 'unused: upload-completed callbacks are refused';
 
 const reply = (body, status = 200) => new Response(JSON.stringify(body), {
   status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
@@ -52,8 +56,12 @@ export default {
     } catch {
       return reply({ error: 'That request was not understood.' }, 400);
     }
+    if (body?.type !== 'blob.generate-presigned-url') return reply({ error: 'That request was not understood.' }, 400);
     try {
-      return reply(await handleUploadPresigned({ body, request, getSignedToken: signedUpload }));
+      return reply(await handleUploadPresigned({
+        body, request, getSignedToken: signedUpload,
+        webhookPublicKey: process.env.BLOB_WEBHOOK_PUBLIC_KEY || UNUSED_WEBHOOK_KEY,
+      }));
     } catch (err) {
       return reply({ error: err instanceof Error ? err.message : 'The upload could not be started.' }, 400);
     }

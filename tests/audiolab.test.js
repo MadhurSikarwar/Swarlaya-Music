@@ -320,6 +320,28 @@ test('the serverless function, the upload function and the page agree on where f
   assert.doesNotMatch(page, /BLOB_READ_WRITE_TOKEN|vercel_blob_rw/);
 });
 
+test('the upload function answers the page without a webhook key, and refuses callbacks', async () => {
+  // @vercel/blob's handleUploadPresigned demands BLOB_WEBHOOK_PUBLIC_KEY even though only the
+  // upload-completed callback uses it; a new Blob store does not set it, so every upload got a 400.
+  const saved = process.env.BLOB_WEBHOOK_PUBLIC_KEY;
+  delete process.env.BLOB_WEBHOOK_PUBLIC_KEY;
+  try {
+    const { default: fn } = await import('../api/master-upload.js');
+    const post = body => fn.fetch(new Request('https://swaralaya.test/api/master-upload', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    }));
+    const bad = await post({ type: 'blob.generate-presigned-url', payload: { pathname: 'elsewhere/x.mp4', clientPayload: null, multipart: false } });
+    assert.equal(bad.status, 400);
+    assert.deepEqual(await bad.json(), { error: 'That upload is not allowed.' }, 'the pathname check ran, so the library got that far');
+    const callback = await post({ type: 'blob.upload-completed', payload: {} });
+    assert.equal(callback.status, 400);
+    assert.deepEqual(await callback.json(), { error: 'That request was not understood.' });
+    assert.equal((await fn.fetch(new Request('https://swaralaya.test/api/master-upload'))).status, 405);
+  } finally {
+    if (saved !== undefined) process.env.BLOB_WEBHOOK_PUBLIC_KEY = saved;
+  }
+});
+
 test('the Vercel config routes the Audio Lab without touching the static site', () => {
   const cfg = JSON.parse(read('vercel.json'));
   assert.deepEqual(cfg.rewrites.at(-1), { source: '/api/master/:op', destination: '/api/master?op=:op' });
