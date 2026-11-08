@@ -277,6 +277,8 @@ export function createPreparer({ canvas, onChange = () => {} }) {
     toggle() { if (playing) this.stop(); else this.play(); },
     isPlaying: () => playing,
     state: () => ({ trim, noise, offset: auto ? null : offset, auto, taps: taps.length, duration: dur() }),
+    /** The decoded recordings, for the sync editor (sync-editor.js). */
+    buffers: () => ({ tabla, lehra, cycle, lehraDb, offset: auto ? null : offset }),
     label: () => `${formatClock(position())} / ${formatClock(dur())}`,
     redraw: draw,
   };

@@ -32,6 +32,8 @@ const ASSETS = [
   './public/js/audiolab/serverless.js',
   './public/js/audiolab/settings.js',
   './public/js/audiolab/spectrogram.js',
+  './public/js/audiolab/sync-editor.js',
+  './public/js/audiolab/sync.js',
   './public/js/carnatic/index.js',
   './public/js/carnatic/shruti.js',
   './public/js/carnatic/talam.js',

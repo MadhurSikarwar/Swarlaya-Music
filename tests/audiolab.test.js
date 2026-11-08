@@ -12,6 +12,9 @@ import {
 } from '../public/js/audiolab/format.js';
 import { FIELDS } from '../public/js/audiolab/settings.js';
 import { clampTempo, raagsFor, taalInfo, taalsFor, tempoFromTabla } from '../public/js/audiolab/lehra-source.js';
+import {
+  formatShift, lehraFromName, lehraTime, mod, offsetForSams, peakOf, rangePeak, samGap, samTimes, snapToOnset, wrapOffset,
+} from '../public/js/audiolab/sync.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const read = p => readFileSync(join(root, p), 'utf8');
@@ -104,7 +107,10 @@ test('every error code the service sends has friendly words', () => {
 
 test('every element the script looks up exists once in the Audio Lab view', () => {
   const html = read('index.html');
-  const view = html.slice(html.indexOf('<div id="view-audio"'), html.indexOf('<!-- YOUR PROGRESS'));
+  // the view, and the sync editor's modal (with the site's other modals, outside the animated view)
+  const modal = html.slice(html.indexOf('<div id="alabSyncModal"'), html.indexOf('<!-- Lehra keyboard shortcuts -->'));
+  assert.ok(modal.includes('data-sync="canvas"'), 'found the sync editor');
+  const view = html.slice(html.indexOf('<div id="view-audio"'), html.indexOf('<!-- YOUR PROGRESS')) + modal;
   assert.ok(view.length > 1000, 'found the view');
   const ids = [...view.matchAll(/\sid="([^"]+)"/g)].map(m => m[1]);
   assert.equal(new Set(ids).size, ids.length, 'ids are unique inside the view');
@@ -358,4 +364,74 @@ test('the serverless limit on length comes with the server’s own advice', () =
   assert.equal(friendlyError('over_limit', 'Trim it to 3.5 minutes.'), 'Trim it to 3.5 minutes.');
   assert.match(read('audio_lab/serverless.py'), /AudioLabError\("over_limit", f"On this site a recording can be up to/);
   assert.equal(friendlyError('busy', 'x'), 'The studio is busy right now. Please try again in a few minutes.');
+});
+
+// ── The sync editor's arithmetic (sync.js) ─────────────────────────────────────
+
+test('an offset is the same modulo the lehra loop, and two sams give the offset', () => {
+  assert.equal(mod(-1, 10), 9);
+  assert.equal(lehraTime(12, 3, 5), 4);                       // 9 s into the lehra = 4 s into its second loop
+  assert.ok(Math.abs(wrapOffset(-50, 92) - 42) < 1e-9);       // a lehra 50 s early = the next loop 42 s late
+  assert.equal(wrapOffset(46, 92), 46);                       // exactly half a loop stays positive
+  assert.ok(Math.abs(offsetForSams(12.5, 0.04, 92) - 12.46) < 1e-9);
+  // after lining up, the gap at the tabla's sam is 0, and every sam a whole cycle on still lines up
+  const off = offsetForSams(12.5, 0.04, 92);
+  assert.ok(Math.abs(samGap(12.5, 0.04, off, 5.333)) < 1e-9);
+  assert.ok(Math.abs(samGap(12.5 + 3 * 5.333, 0.04, off, 5.333)) < 1e-9);
+  assert.ok(Math.abs(samGap(12.5, 0.04, off + 0.012, 5.333) - 0.012) < 1e-9, '+ = lehra late');
+});
+
+test('sams are drawn every cycle from the lehra’s sam, both ways', () => {
+  assert.deepEqual(samTimes(1, 0, 2, 0, 7).map(t => +t.toFixed(6)), [1, 3, 5]);
+  assert.deepEqual(samTimes(-3, 0.5, 2, 0, 4).map(t => +t.toFixed(6)), [1.5, 3.5]);
+  assert.deepEqual(samTimes(0, 0, 0, 0, 10), []);
+});
+
+test('the tempo and taal come from a Lehra Player download’s name', () => {
+  const taals = [{ name: 'Teentaal (16 beats)', beatsPerCycle: 16 }, { name: 'Roopak (7 beats)', beatsPerCycle: 7 },
+    { name: 'Roopak Double Cycle (14 beats)', beatsPerCycle: 7 }, { name: 'Jhaptaal (10 beats)', beatsPerCycle: 10 }];
+  const a = lehraFromName('lehra-Bhimpalasi-Sitar-Teentaal-180bpm-Sa-Csharp-1m32s.mp3', taals);
+  assert.equal(a.bpm, 180);
+  assert.equal(a.beats, 16);
+  assert.ok(Math.abs(a.cycle - 16 * 60 / 180) < 1e-9);
+  assert.equal(lehraFromName('lehra-Kafi-Sarangi-Teentaal-16-beats-90bpm-Sa-B-3m35s.wav', taals).beats, 16);
+  assert.equal(lehraFromName('lehra-Yaman-Sitar-Roopak-Double-Cycle-14-beats-120bpm.mp3', taals).taal, 'Roopak Double Cycle (14 beats)');
+  assert.equal(lehraFromName('my lehra 10 beats 95 bpm.mp3', taals).beats, 10);
+  assert.deepEqual(lehraFromName('lehra 95bpm.mp3', taals), { bpm: 95, beats: null, cycle: null, taal: null });
+  assert.equal(lehraFromName('lehra.mp3', taals), null);
+});
+
+test('a click near a stroke lands on where the stroke starts', () => {
+  const sr = 48000;
+  const x = new Float32Array(sr * 3);
+  let seed = 7;
+  for (let i = 0; i < x.length; i++) { seed = (seed * 16807) % 2147483647; x[i] = (seed / 2147483647 - 0.5) * 0.002; }
+  const stroke = at => { const s = Math.round(at * sr); for (let i = 0; i < 0.15 * sr; i++) x[s + i] += 0.8 * Math.exp(-i / (0.02 * sr)) * Math.sin(i * 0.11); };
+  stroke(1.2345);
+  stroke(2.0);
+  assert.ok(Math.abs(snapToOnset(x, sr, 1.21) - 1.2345) < 0.0015, 'from 25 ms early');
+  assert.ok(Math.abs(snapToOnset(x, sr, 1.27) - 1.2345) < 0.0015, 'from 35 ms late');
+  assert.ok(Math.abs(snapToOnset(x, sr, 1.98, 0.06) - 2.0) < 0.0015);
+  assert.equal(snapToOnset(x, sr, 0.5), 0.5, 'nothing there: left where it was');
+  assert.equal(snapToOnset(new Float32Array(sr), sr, 0.5), 0.5, 'silence');
+});
+
+test('waveform columns and the mix peak', () => {
+  const d = new Float32Array([0, 0.5, -0.25, 0.1]);
+  assert.deepEqual(rangePeak(d, 0, 4), [-0.25, 0.5]);
+  assert.deepEqual(rangePeak(d, 10, 12), [0, 0]);
+  assert.ok(Math.abs(peakOf([new Float32Array([0.1, -0.9]), new Float32Array([0.3])]) - 0.9) < 1e-6);
+  assert.equal(formatShift(0.0456), '+45.6 ms');
+  assert.equal(formatShift(-1.2), '−1.200 s');
+});
+
+test('every part the sync editor looks up is in its modal', () => {
+  const html = read('index.html');
+  const modal = html.slice(html.indexOf('<div id="alabSyncModal"'), html.indexOf('<!-- Lehra keyboard shortcuts -->'));
+  const src = read('public/js/audiolab/sync-editor.js');
+  const wanted = new Set([...src.matchAll(/ui\('([A-Za-z]+)'\)/g)].map(m => m[1]));
+  assert.ok(wanted.size > 20);
+  for (const name of wanted) assert.equal(modal.split(`data-sync="${name}"`).length - 1, 1, `data-sync="${name}" once`);
+  assert.match(modal, /class="modal-overlay"/, 'the shared modal behaviour (Escape, focus) applies');
+  assert.equal(modal.match(/data-nudge="/g).length, 4);
 });

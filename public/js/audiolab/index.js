@@ -35,6 +35,7 @@ import {
   applyControls, countDownload, deletePreset, downloadCounts, listPresets, readControls, savePreset,
 } from './settings.js';
 import { drawSpectrogram } from './spectrogram.js';
+import { createSyncEditor } from './sync-editor.js';
 
 const STORE_KEY = 'swaralaya_audiolab_job';
 const TARGET_LUFS = { reel: -14, youtube: -14, loud: -11, spotify: -14, apple: -16, podcast: -16 };
@@ -812,6 +813,32 @@ function wirePrepare() {
   $('alabNudgePlus').addEventListener('click', () => state.prep.nudge(10));
   $('alabOffsetAuto').addEventListener('change', e => { if (e.target.checked) state.prep.setAuto(true); else state.prep.setOffset(0); });
   $('alabLehraDb').addEventListener('input', e => state.prep.setLehraLevel(+e.target.value));
+  state.sync = createSyncEditor({ overlay: $('alabSyncModal'), onApply: applySync });
+  $('alabSyncOpen').addEventListener('click', openSync);
+}
+
+/** The sync editor on the analysed tabla and the chosen lehra (both already decoded for the preview). */
+function openSync() {
+  const b = state.prep.buffers();
+  if (!b.tabla || !b.lehra) { toast('Choose a lehra and wait for the first look at the tabla.'); return; }
+  state.prep.stop();
+  const meta = state.lehraMode === 'catalogue' && state.rendered ? state.rendered.meta : null;
+  const lehra = lehraFile();
+  state.sync.open({
+    tablaBuffer: b.tabla, lehraBuffer: b.lehra,
+    names: { tabla: state.files.tabla ? state.files.tabla.name : 'tabla', lehra: lehra ? lehra.name : 'lehra' },
+    start: { offset: b.offset, lehraDb: b.lehraDb, beats: meta && meta.beats, bpm: meta && meta.bpm },
+  });
+}
+
+/** "Use this sync": the offset (and the lehra level) go to the preview and on to the mastering. */
+function applySync({ offset, lehraDb }) {
+  state.prep.setOffset(offset);
+  $('alabOffsetAuto').checked = false;
+  const level = $('alabLehraDb');
+  level.value = String(lehraDb);
+  level.dispatchEvent(new Event('input', { bubbles: true }));
+  toast(`Lehra synced: it starts at ${formatNumber(offset, 3)} s.`);
 }
 
 function wireSettings() {

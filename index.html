@@ -985,6 +985,10 @@
           <p class="modal-hint alab-note" id="alabTrimLabel">Drag the gold handles to trim. Switch to &ldquo;Mark noise&rdquo; and drag over a stretch with no playing to teach the noise reduction.</p>
 
           <div class="alab-align" id="alabAlignBox" hidden>
+            <div class="alab-sync-open">
+              <button type="button" class="btn-tap" id="alabSyncOpen">Sync editor</button>
+              <span class="alab-hint">Recorded the lehra separately? Line the two tracks up sam to sam, like in a video editor.</span>
+            </div>
             <label class="vol-label"><span class="vol-name">Lehra level</span>
               <div class="vol-slider-wrap"><input type="range" id="alabLehraDb" class="vol-slider" min="-15" max="0" step="1" value="-7"></div>
               <span class="vol-val" id="alabLehraDbVal"></span></label>
@@ -1621,6 +1625,88 @@
           <span class="toggle-text">Lock-screen controls &amp; background playback</span>
         </label>
         <p class="modal-hint modal-hint-last">Turn off if you need the lowest possible latency — the media element adds a small output buffer.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Audio Lab: line up a separately recorded lehra with the tabla (public/js/audiolab/sync-editor.js) -->
+  <div id="alabSyncModal" class="modal-overlay">
+    <div class="modal-content alab-sync" role="dialog" aria-modal="true" aria-labelledby="alabSyncTitle">
+      <div class="modal-header">
+        <h2 class="panel-title" id="alabSyncTitle">Sync the lehra</h2>
+        <button class="modal-close" data-close-modal aria-label="Close">&times;</button>
+      </div>
+      <p class="alab-sync-help">Drag the lehra track to move it. Double-click each track where its sam is (it snaps to the stroke), then <strong>Line up sams</strong>. Zoom in for the last few milliseconds.</p>
+      <div class="alab-sync-bar">
+        <button type="button" class="btn-transport btn-play alab-small-play" data-sync="play" aria-label="Play or pause both tracks" title="Play / pause (Space)">
+          <svg data-sync="playIcon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+          <svg data-sync="stopIcon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" style="display:none"><path fill="currentColor" d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
+        </button>
+        <span class="alab-sync-time" data-sync="time">0:00 / 0:00</span>
+        <label class="alab-sync-zoom"><span>Zoom</span><input type="range" class="vol-slider" data-sync="zoom" min="0" max="100" value="0" aria-label="Zoom"></label>
+        <button type="button" class="header-icon-btn" data-sync="fit">Whole recording</button>
+        <label class="alab-check"><input type="checkbox" data-sync="follow" checked> Follow</label>
+      </div>
+      <div class="alab-sync-tracks">
+        <div class="alab-sync-track">
+          <span class="alab-sync-name"><strong>Tabla</strong> <span data-sync="tablaName"></span></span>
+          <button type="button" class="header-icon-btn alab-sync-mute" data-sync="muteTabla" aria-pressed="false">Mute</button>
+          <input type="range" class="vol-slider" data-sync="tablaDb" min="-15" max="6" step="1" value="0" aria-label="Tabla level">
+          <span class="vol-val" data-sync="tablaDbVal"></span>
+        </div>
+        <div class="alab-sync-track">
+          <span class="alab-sync-name"><strong>Lehra</strong> <span data-sync="lehraName"></span></span>
+          <button type="button" class="header-icon-btn alab-sync-mute" data-sync="muteLehra" aria-pressed="false">Mute</button>
+          <input type="range" class="vol-slider" data-sync="lehraDb" min="-15" max="0" step="1" value="-7" aria-label="Lehra level">
+          <span class="vol-val" data-sync="lehraDbVal"></span>
+        </div>
+      </div>
+      <div class="alab-sync-lanes" data-sync="lanes">
+        <canvas class="alab-sync-canvas" data-sync="canvas" tabindex="0"
+          aria-label="The tabla (top) and the lehra (bottom) on one timeline. Drag the lehra to move it; double-click a track to mark its sam; Space plays; the arrow keys nudge the lehra by 1 ms"></canvas>
+      </div>
+      <div class="alab-sync-grid">
+        <div class="alab-sync-cell">
+          <span class="practice-label">Tabla sam</span>
+          <span class="alab-sync-val" data-sync="tablaSam">not marked</span>
+          <span class="alab-sync-btns">
+            <button type="button" class="header-icon-btn" data-sync="markTabla" title="Shortcut: T">At the playhead</button>
+            <button type="button" class="header-icon-btn" data-sync="showTabla">Show</button>
+          </span>
+        </div>
+        <div class="alab-sync-cell">
+          <span class="practice-label">Lehra sam</span>
+          <span class="alab-sync-val" data-sync="lehraSam">not marked</span>
+          <span class="alab-sync-btns">
+            <button type="button" class="header-icon-btn" data-sync="markLehra" title="Shortcut: L">At the playhead</button>
+          </span>
+        </div>
+        <div class="alab-sync-cell alab-sync-wide">
+          <button type="button" class="btn-tap" data-sync="lineUp" disabled title="Shortcut: A">Line up sams</button>
+          <span class="alab-sync-gap" data-sync="gap" aria-live="polite"></span>
+        </div>
+        <div class="alab-sync-cell">
+          <label class="practice-label" for="alabSyncOffset">Lehra starts at (s)</label>
+          <input type="number" id="alabSyncOffset" class="alab-sync-num" data-sync="offset" step="0.001">
+          <span class="alab-sync-btns">
+            <button type="button" class="header-icon-btn" data-nudge="-10" title="Lehra 10 ms earlier (Shift+←)">&minus;10</button>
+            <button type="button" class="header-icon-btn" data-nudge="-1" title="Lehra 1 ms earlier (←)">&minus;1</button>
+            <button type="button" class="header-icon-btn" data-nudge="1" title="Lehra 1 ms later (→)">+1</button>
+            <button type="button" class="header-icon-btn" data-nudge="10" title="Lehra 10 ms later (Shift+→)">+10 ms</button>
+          </span>
+        </div>
+        <div class="alab-sync-cell">
+          <span class="practice-label">Taal cycle</span>
+          <span class="alab-sync-btns">
+            <input type="number" class="alab-sync-num alab-sync-small" data-sync="beats" min="1" max="64" step="1" placeholder="16" aria-label="Beats in one cycle"> beats at
+            <input type="number" class="alab-sync-num alab-sync-small" data-sync="bpm" min="10" max="1000" step="0.1" placeholder="BPM" aria-label="Lehra tempo (BPM)"> BPM
+          </span>
+          <span class="alab-hint" data-sync="cycleLabel"></span>
+        </div>
+      </div>
+      <div class="alab-sync-foot">
+        <button type="button" class="header-icon-btn" data-sync="download">Download the synced mix (WAV)</button>
+        <button type="button" class="btn-tap" data-sync="apply">Use this sync</button>
       </div>
     </div>
   </div>
