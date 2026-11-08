@@ -46,6 +46,38 @@ import soundfile as sf
 
 SR = 48000
 
+# ── Lazy-loader stubs ────────────────────────────────────────────────────────
+# librosa builds its namespace from .pyi files (lazy_loader.attach_stub), and
+# Vercel's function bundle leaves *.pyi out, so `import librosa` failed there.
+# Copies of librosa's own stubs (the pinned 0.10.2.post1, ISC licence) are kept
+# in lazy_stubs/ as .txt and used only when a package's stub is missing.
+LAZY_STUBS = Path(__file__).resolve().parent / "lazy_stubs"
+
+
+def use_bundled_lazy_stubs() -> None:
+    try:
+        import lazy_loader
+    except ImportError:
+        return
+    original = getattr(lazy_loader.attach_stub, "__wrapped__", lazy_loader.attach_stub)
+
+    def attach_stub(package_name: str, filename: str):
+        stub = filename if filename.endswith("i") else f"{os.path.splitext(filename)[0]}.pyi"
+        ours = LAZY_STUBS / f"{package_name}.pyi.txt"
+        if not os.path.exists(stub) and ours.exists():
+            import tempfile
+            copy = Path(tempfile.gettempdir()) / "audio-lab-stubs" / f"{package_name}.pyi"
+            copy.parent.mkdir(parents=True, exist_ok=True)
+            copy.write_text(ours.read_text(encoding="utf-8"), encoding="utf-8")
+            stub = str(copy)                     # attach_stub reads a filename ending in "i" as the stub itself
+        return original(package_name, stub)
+
+    attach_stub.__wrapped__ = original
+    lazy_loader.attach_stub = attach_stub
+
+
+use_bundled_lazy_stubs()
+
 # ── Constants ────────────────────────────────────────────────────────────────
 
 # Integrated loudness each destination normalises to ("custom" uses JobOptions.custom_lufs)

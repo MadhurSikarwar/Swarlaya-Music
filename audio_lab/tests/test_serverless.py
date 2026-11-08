@@ -250,6 +250,34 @@ def test_the_worker_sees_the_same_packages(monkeypatch):
     assert env["PYTHONUNBUFFERED"] == "1"
 
 
+def test_lazy_stubs_stand_in_when_the_bundle_drops_pyi_files(tmp_path, monkeypatch):
+    # Vercel's bundle leaves out *.pyi, and librosa builds its namespace from them (lazy_loader.attach_stub):
+    # `import librosa` failed with "Cannot load imports from non-existent stub". A package with no .pyi
+    # beside it must load from audio_lab/lazy_stubs/<package>.pyi.txt instead.
+    pkg = tmp_path / "pkgs" / "stubbed"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("import lazy_loader as lazy\n__getattr__, __dir__, __all__ = lazy.attach_stub(__name__, __file__)\n")
+    (pkg / "inner.py").write_text("def twice(x):\n    return 2 * x\n")
+    stubs = tmp_path / "stubs"
+    stubs.mkdir()
+    (stubs / "stubbed.pyi.txt").write_text("from .inner import twice\n")
+    monkeypatch.setattr(P, "LAZY_STUBS", stubs)
+    monkeypatch.syspath_prepend(str(tmp_path / "pkgs"))
+    P.use_bundled_lazy_stubs()
+    import stubbed
+    assert stubbed.twice(21) == 42
+
+
+def test_the_bundled_librosa_stubs_are_librosas_own():
+    pytest.importorskip("librosa")
+    import librosa
+    root = Path(librosa.__file__).parent
+    for name, rel in [("librosa", "__init__.pyi"), ("librosa.core", "core/__init__.pyi"),
+                      ("librosa.feature", "feature/__init__.pyi"), ("librosa.util", "util/__init__.pyi")]:
+        ours = (P.LAZY_STUBS / f"{name}.pyi.txt").read_text(encoding="utf-8")
+        assert ours == (root / rel).read_text(encoding="utf-8"), name
+
+
 def test_vercel_config_matches_the_function():
     root = Path(__file__).resolve().parents[2]
     cfg = json.loads((root / "vercel.json").read_text(encoding="utf-8"))
