@@ -11,8 +11,10 @@
  *   games/      riyaz games: Swar Pehchaan (ear), Sam Pakdo (laya)
  *   tuner/      swar tuner (microphone pitch detection)
  *   account/    Your Progress page; optional Google sign-in to sync practice and scores
+ *   audiolab/   Audio Lab: clean up, mix and master a tabla / lehra recording (server-side, audio_lab/)
  */
 import { initAccount } from './account/index.js';
+import { initAudioLab, leaveAudioLab } from './audiolab/index.js';
 import { carnaticSa, initCarnatic, stopAll as stopCarnatic } from './carnatic/index.js';
 import { initModals } from './core/modals.js';
 import { initNavigation, onEnterView, onLeaveView } from './core/navigation.js';
@@ -32,6 +34,7 @@ initNotationStudio();
 initCarnatic();
 initPractice();
 initGames();
+initAudioLab();
 
 // The tuner measures against the Lehra's Sa on the Hindustani pages.
 const lehraSa = () => ({ sa: lehraState.pitchHz, system: 'hindustani' });
@@ -53,6 +56,7 @@ onLeaveView(stopNotationPlayback);
 onLeaveView(stopCarnatic);
 onLeaveView(leavePractice);
 onLeaveView(leaveGames);
+onLeaveView(leaveAudioLab);
 
 initNavigation();
 initTour();              // "Take a tour of this page", offered once to a first-time visitor

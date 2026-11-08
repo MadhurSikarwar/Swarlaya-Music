@@ -51,8 +51,9 @@ function moduleGraph(entry) {
 
 const siteUrl = siteUrlFrom(process.env);
 // The Stem Separator works on this host only if /api/ is routed to its server.
+// (/api/master/ is the Audio Lab's own service, audio_lab/: routing it says nothing about the separator.)
 const vercel = JSON.parse(readFileSync(join(root, 'vercel.json'), 'utf8'));
-const separatorLive = (vercel.rewrites || []).some(r => r.source.startsWith('/api/'));
+const separatorLive = (vercel.rewrites || []).some(r => r.source.startsWith('/api/') && !r.source.startsWith('/api/master'));
 
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });

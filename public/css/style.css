@@ -3672,3 +3672,242 @@ body.fullscreen-mode .tour-offer { display: none; }
 @media (max-width: 640px) {
   .features-summary { padding: 0 0 1rem; }
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   Audio Lab (/audio, public/js/audiolab/)
+   Every rule is alab-prefixed and built from the tokens above (panels,
+   buttons, sliders, stat tiles); nothing earlier in this file is changed.
+   ══════════════════════════════════════════════════════════════════ */
+.alab-panel { width: 100%; max-width: 860px; margin: 0 auto; }
+.alab-panel[hidden] { display: none; }
+.alab-note { margin: 8px 0 0; }
+.alab-head { margin-top: 24px; }
+
+/* the "studio not found" notice */
+.alab-server { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; border-color: var(--border-gold); }
+.alab-server-text { font-size: 0.9rem; line-height: 1.55; color: var(--text-primary); }
+.alab-cmd {
+  display: block; max-width: 100%; overflow-x: auto; padding: 9px 12px;
+  background: rgba(0,0,0,0.35); border: 1px solid var(--border); border-radius: 8px;
+  font: 0.8rem/1.4 ui-monospace, 'Cascadia Mono', Consolas, monospace; color: var(--gold-light); user-select: all;
+}
+
+/* file drop zones */
+.alab-drops { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.alab-drop-wrap { position: relative; min-width: 0; }
+.alab-drop {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  min-height: 150px; height: 100%; padding: 22px 16px; text-align: center; cursor: pointer;
+  border: 1.5px dashed var(--border-gold); border-radius: var(--radius);
+  background: rgba(245,166,35,0.03);
+  transition: border-color var(--transition), background var(--transition), transform var(--transition);
+}
+.alab-drop:hover, .alab-drop.dragging { border-color: var(--gold); background: rgba(245,166,35,0.08); }
+.alab-drop.dragging { transform: scale(1.01); }
+.alab-drop.has-file { border-style: solid; background: var(--bg-active); }
+.alab-drop:focus-within { box-shadow: var(--focus-ring); }
+.alab-drop-icon { width: 30px; height: 30px; color: var(--gold); flex-shrink: 0; }
+.alab-drop-title { font-family: 'Cinzel', serif; font-size: 0.92rem; font-weight: 600; letter-spacing: 0.05em; color: var(--text-primary); }
+.alab-drop-title small { font-family: 'Outfit', sans-serif; font-size: 0.7rem; font-weight: 400; color: var(--text-sub); letter-spacing: 0; }
+.alab-drop-hint { font-size: 0.78rem; line-height: 1.4; color: var(--text-sub); }
+.alab-drop-file { font-size: 0.8rem; color: var(--gold-light); overflow-wrap: anywhere; }
+.alab-drop.has-file .alab-drop-hint { display: none; }
+.alab-clear { position: absolute; top: 8px; right: 8px; z-index: 1; }
+
+/* settings */
+.alab-targets { display: flex; flex-wrap: wrap; gap: 8px; }
+.alab-targets .btn-tap { letter-spacing: 0.08em; padding: 9px 18px; font-size: 0.74rem; }
+.alab-targets .btn-tap.active { background: var(--gold); color: #1a1208; }
+.alab-sliders { display: flex; flex-direction: column; gap: 14px; }
+.alab-sliders .vol-name { min-width: 96px; }
+.alab-check { display: inline-flex; align-items: center; gap: 8px; font-size: 0.8rem; line-height: 1.4; color: var(--text-sub); cursor: pointer; }
+.alab-check input { accent-color: var(--gold); width: 16px; height: 16px; flex-shrink: 0; cursor: pointer; }
+.alab-checks { display: flex; flex-direction: column; gap: 8px; }
+.alab-advanced { margin-top: 18px; }
+.alab-advanced summary { cursor: pointer; font-size: 0.8rem; color: var(--text-sub); padding: 4px 0; width: fit-content; transition: color var(--transition); }
+.alab-advanced summary:hover { color: var(--gold); }
+.alab-advanced-body { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; align-items: flex-start; }
+.alab-field { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; font-size: 0.8rem; }
+.alab-field input[type="file"] { font-size: 0.78rem; color: var(--text-sub); max-width: 100%; }
+.alab-reference { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+
+/* run + progress */
+.alab-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 22px; }
+.alab-go { padding: 12px 28px; font-size: 0.8rem; }
+.alab-go:disabled { opacity: 0.4; cursor: default; transform: none; box-shadow: none; }
+.alab-progress { margin-top: 16px; }
+.alab-stage { margin-top: 10px; font-size: 0.92rem; color: var(--text-primary); }
+.alab-error { margin-top: 14px; font-size: 0.86rem; line-height: 1.5; color: #ff8a80; }
+
+/* results */
+.alab-variants { display: flex; flex-wrap: wrap; gap: 8px; }
+.alab-variant { letter-spacing: 0.08em; padding: 9px 18px; font-size: 0.74rem; }
+.alab-variant.active { background: var(--gold); color: #1a1208; }
+.alab-variant:disabled { opacity: 0.4; cursor: default; transform: none; }
+.alab-wave-box { margin-top: 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: rgba(0,0,0,0.25); overflow: hidden; }
+.alab-wave { display: block; width: 100%; height: 120px; cursor: pointer; touch-action: none; }
+.alab-transport { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 14px; }
+.alab-transport .btn-transport:disabled { opacity: 0.4; cursor: default; }
+.alab-time { min-width: 96px; font-size: 0.8rem; color: var(--text-sub); font-variant-numeric: tabular-nums; }
+.alab-sub {
+  margin: 26px 0 10px; font-family: 'Cinzel', serif; font-size: 0.8rem; font-weight: 600;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-sub);
+}
+.alab-sub small { font-family: 'Outfit', sans-serif; font-size: 0.7rem; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--text-muted); }
+.alab-warnings, .alab-decisions, .alab-steps { padding-left: 1.2rem; font-size: 0.84rem; line-height: 1.6; color: var(--text-sub); }
+.alab-warnings { margin-top: 14px; list-style: none; padding: 10px 12px; border-left: 2px solid var(--gold); background: rgba(245,166,35,0.06); border-radius: 0 8px 8px 0; color: var(--gold-light); }
+.alab-warnings li + li { margin-top: 6px; }
+.alab-decisions li + li, .alab-steps li + li { margin-top: 6px; }
+.alab-steps { margin-bottom: 14px; }
+.alab-steps strong { color: var(--text-primary); font-weight: 600; }
+
+.alab-gates { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 6px; padding: 0; }
+.alab-gate {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; font-size: 0.78rem;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: rgba(255,255,255,0.02);
+}
+.alab-gate.bad { border-color: rgba(255,138,128,0.55); background: rgba(255,138,128,0.07); }
+.alab-gate.advisory { border-style: dashed; }
+.alab-gate-mark { width: 16px; text-align: center; font-weight: 700; color: #7bd88f; }
+.alab-gate.bad .alab-gate-mark { color: #ff8a80; }
+.alab-gate-label { flex: 1; min-width: 0; color: var(--text-primary); }
+.alab-gate-value { color: var(--gold); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.alab-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.alab-tiles .stat-tile-value { font-size: 0.92rem; text-align: center; }
+
+.alab-bands { display: flex; flex-direction: column; gap: 6px; }
+.alab-band { display: grid; grid-template-columns: 150px minmax(0, 1fr) 92px; align-items: center; gap: 10px; font-size: 0.74rem; color: var(--text-sub); }
+.alab-band-bars { position: relative; height: 14px; border-radius: 4px; background: rgba(255,255,255,0.04); }
+.alab-bar { position: absolute; left: 0; height: 6px; border-radius: 3px; transition: width 0.4s ease; }
+.alab-bar.before { top: 0; background: var(--text-muted); }
+.alab-bar.after { bottom: 0; background: var(--gold); }
+.alab-band-value { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.alab-key { display: inline-block; width: 10px; height: 6px; border-radius: 3px; margin: 0 2px 1px 6px; }
+.alab-key.before { background: var(--text-muted); }
+.alab-key.after { background: var(--gold); }
+
+.alab-specs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.alab-spec { margin: 0; min-width: 0; }
+.alab-spec canvas { display: block; width: 100%; height: 170px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-deep); }
+.alab-spec figcaption { margin-top: 4px; font-size: 0.72rem; color: var(--text-sub); }
+.alab-downloads { display: flex; flex-wrap: wrap; gap: 8px; }
+.alab-result-actions { margin-top: 26px; }
+
+@media (max-width: 640px) {
+  .alab-drops, .alab-specs { grid-template-columns: 1fr; }
+  .alab-drop { min-height: 124px; }
+  .alab-band { grid-template-columns: 112px minmax(0, 1fr) 70px; gap: 8px; }
+  .alab-gates { grid-template-columns: 1fr; }
+  .alab-sliders .vol-name { min-width: 76px; }
+  .alab-go { width: 100%; }
+  .alab-wave { height: 96px; }
+}
+@media (pointer: coarse) {
+  .alab-check input { width: 20px; height: 20px; }
+}
+
+/* Audio Lab — the four steps: recordings, prepare, sound, video (all alab-prefixed) */
+.alab-step {
+  display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; margin-right: 6px;
+  border-radius: 50%; border: 1px solid var(--border-gold); color: var(--gold); font-size: 0.7rem; font-family: 'Outfit', sans-serif;
+}
+.alab-label { margin: 16px 0 8px; font-size: 0.8rem; }
+.alab-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; margin-bottom: 12px; }
+.alab-title-field .text-input { flex: 1; min-width: 0; }
+
+/* recording here */
+.alab-drops > .alab-drop-wrap:first-child { display: flex; flex-direction: column; }
+.alab-drops > .alab-drop-wrap:first-child > .alab-drop { flex: 1; height: auto; }
+.alab-record-row { display: flex; justify-content: center; margin-top: 8px; }
+.alab-record-row svg { color: #e8572a; }
+.alab-recbox { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 10px; padding: 10px 12px;
+  border: 1px solid rgba(232,87,42,0.45); border-radius: var(--radius-sm); background: rgba(232,87,42,0.07); }
+.alab-recdot { width: 10px; height: 10px; border-radius: 50%; background: #e8572a; animation: alabPulse 1.2s ease-in-out infinite; }
+@keyframes alabPulse { 50% { opacity: 0.3; } }
+.alab-rectime { min-width: 44px; font-variant-numeric: tabular-nums; color: var(--text-primary); font-size: 0.85rem; }
+.alab-meter { flex: 1; min-width: 80px; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.06); overflow: hidden; }
+.alab-meter-fill { display: block; width: 0; height: 100%; background: linear-gradient(90deg, var(--gold-dark), var(--gold)); transition: width 0.08s linear; }
+.alab-meter-fill.hot { background: #ff8a80; }
+
+/* lehra source */
+.alab-lehra-wrap { display: flex; flex-direction: column; gap: 10px; }
+.alab-segment { display: flex; padding: 3px; gap: 3px; border-radius: 22px; background: rgba(0,0,0,0.25); border: 1px solid var(--border); }
+.alab-seg { flex: 1; padding: 7px 10px; border: none; border-radius: 18px; background: transparent; color: var(--text-sub);
+  font: 500 0.78rem 'Outfit', sans-serif; cursor: pointer; transition: all var(--transition); white-space: nowrap; }
+.alab-seg:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+.alab-seg.active { color: var(--gold); background: var(--bg-active); box-shadow: inset 0 0 0 1px var(--border-gold); }
+.alab-segment-small { display: inline-flex; }
+.alab-segment-small .alab-seg { flex: none; padding: 5px 12px; font-size: 0.74rem; }
+.alab-drop-small { min-height: 110px; }
+.alab-cat { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: rgba(255,255,255,0.02); }
+.alab-cat .alab-field .practice-label { min-width: 74px; }
+.alab-cat .num-input { width: 84px; }
+.alab-sa { width: 96px !important; }
+
+/* more tracks */
+.alab-tracks { gap: 16px; }
+.alab-track { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%; }
+.alab-vocal-options { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.alab-analyse { margin-top: 12px; }
+
+/* prepare */
+.alab-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.alab-chip { padding: 4px 10px; border-radius: 14px; font-size: 0.74rem; color: var(--text-primary);
+  border: 1px solid var(--border); background: rgba(255,255,255,0.03); font-variant-numeric: tabular-nums; }
+.alab-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 10px; }
+.alab-small-play { width: 40px; height: 40px; box-shadow: 0 4px 16px rgba(245,166,35,0.3); }
+.alab-small-play svg { width: 18px; height: 18px; }
+.alab-editor-box { margin-top: 0; }
+.alab-editor { display: block; width: 100%; height: 140px; cursor: crosshair; touch-action: none; }
+.alab-align { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; padding: 12px; border: 1px solid var(--border-gold);
+  border-radius: var(--radius-sm); background: rgba(245,166,35,0.04); }
+.alab-align .vol-name { min-width: 96px; }
+.alab-tap-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+.alab-tap-row .btn-tap:disabled { opacity: 0.4; cursor: default; transform: none; box-shadow: none; }
+.alab-offset-label { font-size: 0.8rem; color: var(--gold-light); font-variant-numeric: tabular-nums; }
+
+/* sound */
+.alab-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 14px; }
+.alab-custom { margin-top: 10px; }
+.alab-vol-check { min-width: 96px; }
+.alab-sliders .header-icon-btn { flex-shrink: 0; }
+
+/* batch */
+.alab-batch-list { list-style: none; display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 0; }
+.alab-batch-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 8px 10px; font-size: 0.8rem;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: rgba(255,255,255,0.02); }
+.alab-batch-name { overflow-wrap: anywhere; color: var(--text-primary); }
+.alab-batch-status { color: var(--text-sub); text-align: right; }
+.alab-batch-row[data-state="done"] .alab-batch-status { color: #7bd88f; }
+.alab-batch-row[data-state="failed"] { border-color: rgba(255,138,128,0.45); }
+.alab-batch-row[data-state="failed"] .alab-batch-status { color: #ff8a80; }
+.alab-batch-bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.06); overflow: hidden; }
+.alab-batch-fill { display: block; width: 0; height: 100%; background: linear-gradient(90deg, var(--gold-dark), var(--gold)); transition: width 0.4s ease; }
+.alab-batch-links { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+.alab-batch-links:empty { display: none; }
+
+/* riyaz insights */
+.alab-insights .alab-tiles { margin-bottom: 12px; }
+.alab-chart { margin: 0 0 14px; }
+.alab-chart canvas { display: block; width: 100%; height: 150px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: rgba(0,0,0,0.25); }
+.alab-chart figcaption { margin-top: 4px; font-size: 0.72rem; color: var(--text-sub); }
+.alab-sections { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; padding: 0; font-size: 0.74rem; color: var(--text-sub); }
+.alab-sections li { padding: 2px 8px; border-radius: 10px; border: 1px solid var(--border); }
+.alab-types { display: flex; flex-direction: column; gap: 6px; }
+.alab-type { display: grid; grid-template-columns: minmax(0, 1fr) 40% 48px; align-items: center; gap: 10px; font-size: 0.78rem; }
+.alab-type-name { color: var(--text-primary); }
+.alab-type-bar { height: 8px; border-radius: 4px; background: rgba(255,255,255,0.05); overflow: hidden; }
+.alab-type-fill { display: block; height: 100%; border-radius: 4px; }
+.alab-type-combined { background: var(--gold); }
+.alab-type-resonant { background: var(--gold-light); }
+.alab-type-bass { background: #e8572a; }
+.alab-type-closed { background: var(--text-muted); }
+.alab-type-value { text-align: right; color: var(--text-sub); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 640px) {
+  .alab-grid2 { grid-template-columns: 1fr; }
+  .alab-type { grid-template-columns: minmax(0, 1fr) 30% 40px; }
+  .alab-editor { height: 110px; }
+  .alab-seg { padding: 7px 6px; font-size: 0.74rem; }
+  .alab-align .vol-name { min-width: 76px; }
+}

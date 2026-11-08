@@ -48,6 +48,12 @@ export const ROUTES = [
     description: 'Your riyaz time and game scores, and an optional account to keep them across devices.',
   },
   {
+    // Needs the audio_lab service behind the site, so it stays out of search results until that is set up
+    path: '/audio', view: 'view-audio', name: 'Audio Lab', index: false, crumbs: ['/hindustani'],
+    title: 'Audio Lab: Master Tabla & Lehra Recordings | Swaralaya',
+    description: 'Clean up, mix and loudness-match a raw tabla recording and lehra for Reels, Shorts and YouTube. Three versions to compare by ear, every check shown.',
+  },
+  {
     path: '/practice', view: 'view-practice', name: 'Practise Along', index: false,
     title: 'Practise Along | Swaralaya',
     description: 'Play the accompaniment of a separated song at your own Sa and tempo.',

@@ -16,3 +16,21 @@ services:
       - ./favicon.ico:/app/favicon.ico:ro
       - ./public:/app/public:ro
       - ./assets:/app/assets:ro
+
+  # The Audio Lab service (audio_lab/). Off by default, so a plain `docker compose up` is unchanged:
+  #   docker compose --profile audio up --build     → the site on :3000 and the audio service on :8100
+  # On localhost the /audio page finds the service on :8100 by itself.
+  audio-lab:
+    profiles: ["audio"]
+    build:
+      context: .
+      dockerfile: audio_lab/Dockerfile
+    ports:
+      - "8100:8100"
+    environment:
+      - AUDIO_LAB_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+    volumes:
+      - audio-lab-data:/data
+
+volumes:
+  audio-lab-data:

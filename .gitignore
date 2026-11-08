@@ -59,3 +59,7 @@ desktop.ini
 
 # Static build for Vercel (node tools/build-static.mjs)
 dist/
+
+# Audio Lab: job data and the page snapshots the Playwright MCP writes
+audio_lab/data/
+.playwright-mcp/

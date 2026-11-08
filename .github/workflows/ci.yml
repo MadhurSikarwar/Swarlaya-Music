@@ -17,6 +17,18 @@ jobs:
       - run: npm run lint
       - run: npm test
 
+  audio-lab:
+    name: Audio Lab (Python) tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libsndfile1
+      - run: pip install -r audio_lab/requirements-dev.txt
+      - run: python -m pytest audio_lab/tests -q
+
   server:
     # Builds the production image (this is what compiles the C++ server) and
     # smoke-tests it, so build errors show up here instead of on Render.

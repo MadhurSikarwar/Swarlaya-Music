@@ -34,6 +34,7 @@
 | **Swar Tuner** | *Global Header* | AudioWorklet + YIN Pitch Algorithm | Real-time swar detection relative to base Sa in Just Intonation or Equal Temperament (cents deviation needle) |
 | **AI Stem Separator** | `/separator/` | Next.js 14 + Drogon C++ + Demucs | Extracts vocals, drums, bass, guitar, piano & other using Meta's `htdemucs_6s` neural network |
 | **Practise Along** | `/practice` | AudioWorklet (Song Mode) | Transpose, time-stretch and isolate stems from separated songs to practise along in real time; the song's Sa is detected from its vocals; A–B loop for repeating a phrase |
+| **Audio Lab** | `/audio` | FastAPI + pedalboard + librosa (Python service, `audio_lab/`) | Cleans up, mixes and masters a raw tabla recording (audio or video) with an optional lehra for Reels, Shorts and YouTube: three versions to A/B, a measured quality gate on each, the video re-muxed untouched. See [Audio Lab](#-audio-lab) |
 | **Riyaz Games** | `/games` | Web Audio + Lehra engine clock | *Swar Pehchaan* (ear training: name the swar sung over a drone, 5 levels) and *Sam Pakdo* (rhythm: tap on sam while the real lehra plays, judged to the millisecond against the audio actually heard; 6 unlockable stages) |
 
 ---
@@ -213,6 +214,22 @@ Every page has a step-by-step tour ("Take a tour of this page" in the footer; of
 
 ---
 
+## 🎚️ Audio Lab
+
+A separate section (`/audio`, reached from the Hindustani page and the footer) that takes a **raw tabla recording and, optionally, a lehra** and returns cleaned, mixed, loudness-matched versions ready for Instagram Reels, YouTube Shorts and YouTube — plus the original video with the new audio in it.
+
+* **Three versions to compare by ear** — *Balanced*, *Phone + bass* (the default) and *Soft highs* — in a waveform player that switches instantly and carries on from the same moment, with loudness-matched A/B and a rough phone-speaker model.
+* **Everything is measured, nothing is claimed by ear.** LUFS (pyloudnorm *and* ffmpeg), true peak, clipping, tonal balance in eight bands, before/after spectrograms, the dayan's pitch, tempo. Each version is checked on the file that was written (loudness ±0.3 LU of −14 / −11 LUFS, true peak ≤ −1 dBTP, no new clipping, ≤ 6 dB tone change, length within 50 ms); a version that fails is withheld, and the page says why.
+* **Adaptive, explained.** The tabla EQ is scaled from the measured balance (clamped to ±4 dB) and the report lists each decision with its reason. Clipped peaks are rebuilt, mains hum notched, noise lightly reduced — with a check that the dayan's ring is not eaten.
+* **Lehra mixing.** Looped with 50 ms crossfades without drifting out of step, levelled by loudness against the tabla, ducked under the strokes; tempo, pitch and offset are measured against the tabla (estimates, labelled as such).
+* **Prepare before mastering.** The recording is analysed as soon as it is chosen; then trim it on its waveform, mark a noise-only stretch, and tap on sam while it plays with the lehra to lock them together. A *Swaralaya lehra* (any raag and taal of the catalogue) is made in the page at the tabla's tempo and Sa.
+* **More than tabla.** Record in the page, sync a second, better recorder to the video automatically, add a vocal or a tanpura bed; profiles for pakhawaj, Kathak, vocal, harmonium and sitar; hall and temple rooms; Spotify/Apple Music/podcast/custom targets; pitch and speed changes; 9:16 or square video with a title; a before/after clip; batch processing; presets.
+* **Riyaz insights.** Tempo over time (rushing and dragging), how even the strokes are, how close to sam, the dayan's tuning against Sa, and an experimental split of stroke types.
+
+It runs as its own Python service because it needs ffmpeg, NumPy/SciPy and a few CPU-seconds per second of audio — not a place for the Drogon image or a serverless function. The page finds it at `/api/master/…` (a prefix the C++ server does not use); if it is not there, the page says so and the rest of the site is unaffected. Start it with `python -m uvicorn audio_lab.server:app --port 8100`, or `docker compose --profile audio up --build`. Setup, the pipeline, the API, limits and how to put it behind your host: [`audio_lab/README.md`](audio_lab/README.md).
+
+---
+
 ## 🎛️ Core Features
 
 ### 🎻 1. The Lehra Player
@@ -284,10 +301,12 @@ webapp/
 │   │   ├── notation/        # Score editor, synthesizer & Deflate share engine
 │   │   ├── tuner/           # YIN AudioWorklet pitch tracker
 │   │   ├── practice/        # Song mode accompaniment engine
+│   │   ├── audiolab/        # Audio Lab page: upload, progress, A/B player, report (talks to audio_lab/)
 │   │   ├── account/         # Your Progress page; optional Google sign-in + sync (Firebase)
 │   │   └── main.js          # App lifecycle initialization
 │   └── separator/           # Pre-compiled static export of stem-frontend
 ├── stem-frontend/           # Standalone Next.js 14 multitrack separator UI
+├── audio_lab/               # Audio Lab service (Python): processing.py (all DSP), FastAPI server, worker, tests
 ├── assets/                  # High-quality audio cycles, tanpura plucks, metronome
 ├── tests/                   # Automated node:test unit suites & smoke shell tests
 ├── tools/                   # dev_server.py, build-static.mjs (Vercel build) and seo.mjs (per-route pages, sitemap)
@@ -303,8 +322,11 @@ npm install
 # Run static code analysis across JS modules and service worker
 npm run lint
 
-# Execute the 52 unit test suites (DSP math, intonation, scheduler, caching)
+# Execute the unit test suites (DSP math, intonation, scheduler, caching, Audio Lab page)
 npm test
+
+# The Audio Lab service (needs Python 3.12 + ffmpeg: pip install -r audio_lab/requirements-dev.txt)
+python -m pytest audio_lab/tests -q
 
 # Run HTTP integration and API validation smoke test (server must be running)
 bash tests/smoke.sh http://localhost:3000

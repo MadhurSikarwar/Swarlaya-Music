@@ -1,0 +1,31 @@
+# Dependencies of the Audio Lab's Vercel Function (api/master.py → audio_lab/serverless.py) — nothing else.
+#
+# Vercel installs this file (with uv.lock) for the Python function in api/; the static site's build does not
+# use Python at all. The Docker images keep their own lists: requirements.txt (the Stem Separator's Demucs, for
+# the Drogon image) and audio_lab/requirements.txt (the Audio Lab service). Versions are the ones the tests ran
+# with; imageio-ffmpeg brings a static ffmpeg 9 (with drawtext, libmp3lame, libx264), as a function has none.
+#
+# After changing anything here:  uv lock
+[project]
+name = "swaralaya-audio-lab-function"
+version = "1.0.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "numpy==1.26.4",
+    "scipy==1.13.1",
+    "soundfile==0.12.1",
+    "librosa==0.10.2.post1",
+    "numba==0.60.0",
+    "llvmlite==0.43.0",
+    "scikit-learn==1.5.1",
+    "pedalboard==0.9.23",
+    "pyloudnorm==0.2.0",
+    "noisereduce==3.0.3",
+    "matchering==2.0.6",
+    "starlette==1.6.0",
+    "imageio-ffmpeg==0.8.1",
+    "vercel-blob==0.5.1",
+]
+
+[tool.uv]
+package = false

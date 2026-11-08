@@ -31,7 +31,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="/public/css/style.css?v=30" />
+  <link rel="stylesheet" href="/public/css/style.css?v=32" />
   <link rel="manifest" href="/manifest.json" />
   <link rel="icon" href="/public/icons/icon.svg" type="image/svg+xml" />
   <link rel="icon" href="/favicon.ico" sizes="48x48" />
@@ -330,6 +330,15 @@
           <div class="card-body">
             <h2>Practise Along</h2>
             <p>Separate any song, then play its accompaniment at your own Sa and tempo.</p>
+          </div>
+        </a>
+        <a class="dashboard-card fade-up delay-4" href="/audio" data-target="view-audio">
+          <div class="card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"></path><path d="M1 14h6M9 8h6M17 16h6"></path></svg>
+          </div>
+          <div class="card-body">
+            <h2>Audio Lab</h2>
+            <p>Clean up, mix and master a raw tabla recording with a lehra for Reels, Shorts and YouTube &mdash; three versions to compare by ear.</p>
           </div>
         </a>
       </div>
@@ -839,6 +848,377 @@
       </section>
     </div>
 
+    <!-- AUDIO LAB (/audio, public/js/audiolab/): clean up, mix and master a tabla / lehra recording.
+         The processing runs on the audio_lab/ service; this page uploads, prepares, follows the job and plays the results. -->
+    <div id="view-audio" class="app-view" style="display: none;" data-domain="hindustani">
+      <div class="hero-section fade-up">
+        <h1 class="hero-title">Audio <span class="text-gradient">Lab</span></h1>
+        <p class="hero-subtitle">Drop in a raw tabla recording &mdash; or record one here &mdash; add a lehra, and get it back cleaned, mixed and matched to Reels, Shorts or YouTube loudness, in three versions to compare by ear.</p>
+      </div>
+
+      <section class="control-panel alab-panel alab-server" id="alabServer" aria-live="polite">
+        <p class="alab-server-text" id="alabServerText">Looking for the audio studio&hellip;</p>
+        <code class="alab-cmd" id="alabServerCmd" hidden></code>
+        <button type="button" class="header-icon-btn" id="alabServerRetry" hidden>Try again</button>
+      </section>
+
+      <section class="control-panel alab-panel" id="alabForm" aria-label="Your recordings and settings">
+        <!-- 1 · recordings -->
+        <div class="panel-header"><h2 class="panel-title"><span class="alab-step">1</span> Your recordings</h2></div>
+        <div class="alab-drops">
+          <div class="alab-drop-wrap">
+            <label class="alab-drop" id="alabTablaDrop" for="alabTablaFile">
+              <input type="file" id="alabTablaFile" class="visually-hidden" accept="audio/*,video/*,.mp4,.mov,.m4a,.mp3,.wav,.flac,.ogg,.aac,.mkv,.webm">
+              <svg class="alab-drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+              <span class="alab-drop-title">Tabla recording</span>
+              <span class="alab-drop-hint" id="alabTablaHint">Drop it here or tap to choose &mdash; audio or video</span>
+              <span class="alab-drop-file" id="alabTablaName" hidden></span>
+            </label>
+            <button type="button" class="header-icon-btn icon-only alab-clear" id="alabTablaClear" hidden aria-label="Remove the tabla recording" title="Remove">&times;</button>
+            <div class="alab-record-row">
+              <button type="button" class="header-icon-btn" id="alabRecord" title="Record with this device's microphone">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="6"/></svg>
+                Record here
+              </button>
+            </div>
+            <div class="alab-recbox" id="alabRecBox" hidden>
+              <span class="alab-recdot" aria-hidden="true"></span>
+              <span class="alab-rectime" id="alabRecTime">0:00</span>
+              <span class="alab-meter" aria-hidden="true"><span class="alab-meter-fill" id="alabRecLevel"></span></span>
+              <button type="button" class="btn-tap" id="alabRecStop">Stop</button>
+              <button type="button" class="header-icon-btn" id="alabRecCancel">Cancel</button>
+            </div>
+          </div>
+
+          <div class="alab-drop-wrap alab-lehra-wrap">
+            <div class="alab-segment" id="alabLehraMode" role="radiogroup" aria-label="Lehra">
+              <button type="button" class="alab-seg" role="radio" aria-checked="true" data-lehra-mode="none">No lehra</button>
+              <button type="button" class="alab-seg" role="radio" aria-checked="false" data-lehra-mode="catalogue">Swaralaya lehra</button>
+              <button type="button" class="alab-seg" role="radio" aria-checked="false" data-lehra-mode="upload">My own</button>
+            </div>
+            <div id="alabLehraUploadBox" hidden>
+              <label class="alab-drop alab-drop-small" id="alabLehraDrop" for="alabLehraFile">
+                <input type="file" id="alabLehraFile" class="visually-hidden" accept="audio/*,.mp3,.wav,.m4a,.aac,.flac,.ogg">
+                <svg class="alab-drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                <span class="alab-drop-title">Lehra file</span>
+                <span class="alab-drop-hint">A loop that starts on sam</span>
+                <span class="alab-drop-file" id="alabLehraName" hidden></span>
+              </label>
+              <button type="button" class="header-icon-btn icon-only alab-clear" id="alabLehraClear" hidden aria-label="Remove the lehra" title="Remove">&times;</button>
+            </div>
+            <div class="alab-cat" id="alabCatBox" hidden>
+              <label class="alab-field"><span class="practice-label">Instrument</span><select id="alabCatInstrument" class="pitch-select small-select alab-setting"></select></label>
+              <label class="alab-field"><span class="practice-label">Taal</span><select id="alabCatTaal" class="pitch-select small-select alab-setting"></select></label>
+              <label class="alab-field"><span class="practice-label">Raag</span><select id="alabCatRaag" class="pitch-select small-select alab-setting"></select></label>
+              <div class="alab-field">
+                <label class="practice-label" for="alabCatBpm">Tempo</label>
+                <input type="number" id="alabCatBpm" class="num-input" min="30" max="500" step="1" value="120">
+                <span class="practice-unit">BPM</span>
+                <button type="button" class="header-icon-btn" id="alabCatBpmTabla" disabled title="The tabla's tempo, as the beat tracker measured it">Tabla&rsquo;s tempo</button>
+              </div>
+              <div class="alab-field">
+                <label class="practice-label" for="alabSa">Sa</label>
+                <input type="number" id="alabSa" class="num-input alab-sa" min="60" max="500" step="0.01" placeholder="Hz">
+                <span class="practice-unit" id="alabSaNote"></span>
+                <button type="button" class="header-icon-btn" id="alabSaTabla" disabled title="The pitch the dayan rings at, folded into the lehra's range">From the dayan</button>
+              </div>
+              <p class="modal-hint alab-note" id="alabCatStatus"></p>
+            </div>
+          </div>
+        </div>
+
+        <details class="alab-advanced" id="alabMoreTracks">
+          <summary>More tracks &mdash; a better microphone, a vocal, a reference</summary>
+          <div class="alab-advanced-body alab-tracks">
+            <div class="alab-track">
+              <label class="alab-field" for="alabRecorderFile"><span class="practice-label">Second recorder</span>
+                <input type="file" id="alabRecorderFile" accept="audio/*,video/*,.wav,.mp3,.m4a,.flac"></label>
+              <span class="modal-hint alab-note" id="alabRecorderName" hidden></span>
+              <button type="button" class="header-icon-btn" id="alabRecorderClear" hidden>Remove</button>
+              <p class="modal-hint alab-note">Recorded the same performance on a better recorder or USB mic? Its sound is lined up with your video automatically (to the millisecond, clock drift included) and used instead of the phone&rsquo;s.</p>
+            </div>
+            <div class="alab-track">
+              <label class="alab-field" for="alabVocalFile"><span class="practice-label">Vocal track</span>
+                <input type="file" id="alabVocalFile" accept="audio/*,.wav,.mp3,.m4a,.flac"></label>
+              <span class="modal-hint alab-note" id="alabVocalName" hidden></span>
+              <button type="button" class="header-icon-btn" id="alabVocalClear" hidden>Remove</button>
+              <div class="alab-vocal-options" id="alabVocalOptions" hidden>
+                <label class="vol-label"><span class="vol-name">Vocal level</span>
+                  <div class="vol-slider-wrap"><input type="range" id="alabVocalDb" class="vol-slider" min="-12" max="6" step="1" value="0"></div>
+                  <span class="vol-val" id="alabVocalDbVal"></span></label>
+                <div class="alab-field"><label class="practice-label" for="alabVocalOffset">Starts</label>
+                  <input type="number" id="alabVocalOffset" class="num-input" min="-30" max="30" step="0.01" value="0">
+                  <span class="practice-unit">s later (&minus; earlier) than the tabla</span></div>
+              </div>
+            </div>
+            <div class="alab-track alab-reference" id="alabReferenceBox">
+              <label class="alab-field" for="alabReferenceFile"><span class="practice-label">Reference track</span>
+                <input type="file" id="alabReferenceFile" accept="audio/*,.mp3,.wav,.m4a,.flac"></label>
+              <span class="modal-hint alab-note" id="alabReferenceName" hidden></span>
+              <button type="button" class="header-icon-btn" id="alabReferenceClear" hidden>Remove</button>
+              <p class="modal-hint alab-note">&ldquo;Make it sound like this&rdquo;: the tone is matched to your reference; the loudness still goes to the target below.</p>
+            </div>
+          </div>
+        </details>
+        <p class="tool-status alab-analyse" id="alabAnalyseStatus" aria-live="polite"></p>
+
+        <!-- 2 · prepare -->
+        <div class="alab-prepare" id="alabPrepare" hidden>
+          <div class="panel-header alab-head"><h2 class="panel-title"><span class="alab-step">2</span> Prepare</h2></div>
+          <div class="alab-chips" id="alabChips"></div>
+          <div class="alab-toolbar">
+            <button class="btn-transport btn-play alab-small-play" id="alabPrevPlay" title="Play / stop the preview" aria-label="Play the preview">
+              <svg id="alabPrevPlayIcon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+              <svg id="alabPrevStopIcon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="display:none"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+            </button>
+            <span class="alab-time" id="alabPrevTime">0:00 / 0:00</span>
+            <div class="alab-segment alab-segment-small" role="radiogroup" aria-label="What dragging on the waveform does">
+              <button type="button" class="alab-seg" role="radio" aria-checked="true" id="alabModeTrim">Trim</button>
+              <button type="button" class="alab-seg" role="radio" aria-checked="false" id="alabModeNoise">Mark noise</button>
+            </div>
+            <button type="button" class="header-icon-btn" id="alabTrimReset" hidden>Keep all</button>
+            <button type="button" class="header-icon-btn" id="alabNoiseClear" hidden>Clear noise mark</button>
+          </div>
+          <div class="alab-wave-box alab-editor-box">
+            <canvas id="alabEditor" class="alab-editor" aria-label="Your recording: drag the handles to trim, click to move the playhead"></canvas>
+          </div>
+          <p class="modal-hint alab-note" id="alabTrimLabel">Drag the gold handles to trim. Switch to &ldquo;Mark noise&rdquo; and drag over a stretch with no playing to teach the noise reduction.</p>
+
+          <div class="alab-align" id="alabAlignBox" hidden>
+            <label class="vol-label"><span class="vol-name">Lehra level</span>
+              <div class="vol-slider-wrap"><input type="range" id="alabLehraDb" class="vol-slider" min="-15" max="0" step="1" value="-7"></div>
+              <span class="vol-val" id="alabLehraDbVal"></span></label>
+            <div class="alab-tap-row">
+              <label class="alab-check"><input type="checkbox" id="alabWithLehra" checked> Hear the lehra</label>
+              <button type="button" class="btn-tap" id="alabTapSam" disabled title="While it plays, tap on each sam of your tabla">Tap on sam</button>
+              <button type="button" class="header-icon-btn" id="alabNudgeMinus" title="Lehra 10 ms earlier">&minus;10 ms</button>
+              <button type="button" class="header-icon-btn" id="alabNudgePlus" title="Lehra 10 ms later">+10 ms</button>
+              <label class="alab-check"><input type="checkbox" id="alabOffsetAuto" checked> Automatic</label>
+              <span class="alab-offset-label" id="alabOffsetLabel">Offset: automatic</span>
+            </div>
+          </div>
+          <p class="tool-status" id="alabTuneLine"></p>
+        </div>
+
+        <!-- 3 · sound -->
+        <div class="panel-header alab-head"><h2 class="panel-title"><span class="alab-step" id="alabStepSound">2</span> Sound</h2></div>
+        <div class="alab-presets">
+          <label class="alab-field"><span class="practice-label">Preset</span>
+            <select id="alabPreset" class="pitch-select small-select"><option value="">My settings&hellip;</option></select></label>
+          <button type="button" class="header-icon-btn" id="alabPresetSave">Save as preset</button>
+          <button type="button" class="header-icon-btn" id="alabPresetDelete" hidden>Delete</button>
+        </div>
+        <div class="alab-grid2">
+          <label class="alab-field"><span class="practice-label">Instrument</span>
+            <select id="alabProfile" class="pitch-select small-select alab-setting">
+              <option value="tabla" selected>Tabla</option>
+              <option value="pakhawaj">Pakhawaj</option>
+              <option value="kathak">Kathak (tabla + ghungroo)</option>
+              <option value="vocal">Vocal</option>
+              <option value="harmonium">Harmonium</option>
+              <option value="sitar">Sitar</option>
+            </select></label>
+          <label class="alab-field"><span class="practice-label">Room</span>
+            <select id="alabReverb" class="pitch-select small-select alab-setting">
+              <option value="none">Dry</option>
+              <option value="room" selected>Small room</option>
+              <option value="hall">Hall</option>
+              <option value="temple">Temple</option>
+            </select></label>
+        </div>
+        <p class="practice-label alab-label">Where it will be heard</p>
+        <div class="alab-targets" id="alabTargets" role="radiogroup" aria-label="Loudness target">
+          <button type="button" class="btn-tap alab-setting" role="radio" aria-checked="true" data-target-name="reel">Reels &amp; Shorts</button>
+          <button type="button" class="btn-tap alab-setting" role="radio" aria-checked="false" data-target-name="youtube">YouTube</button>
+          <button type="button" class="btn-tap alab-setting" role="radio" aria-checked="false" data-target-name="loud">Loud for phones</button>
+          <button type="button" class="btn-tap alab-setting" role="radio" aria-checked="false" data-target-name="spotify">Spotify</button>
+          <button type="button" class="btn-tap alab-setting" role="radio" aria-checked="false" data-target-name="apple">Apple Music</button>
+          <button type="button" class="btn-tap alab-setting" role="radio" aria-checked="false" data-target-name="podcast">Podcast</button>
+          <button type="button" class="btn-tap alab-setting" role="radio" aria-checked="false" data-target-name="custom">Custom</button>
+        </div>
+        <label class="vol-label alab-custom" id="alabCustomBox" hidden><span class="vol-name">Loudness</span>
+          <div class="vol-slider-wrap"><input type="range" id="alabCustomLufs" class="vol-slider" min="-24" max="-8" step="0.5" value="-14"></div>
+          <span class="vol-val" id="alabCustomLufsVal"></span></label>
+        <p class="modal-hint alab-note" id="alabTargetNote"></p>
+
+        <div class="alab-sliders">
+          <label class="vol-label"><span class="vol-name">Brightness</span>
+            <div class="vol-slider-wrap"><input type="range" id="alabBrightness" class="vol-slider" min="-3" max="3" step="0.5" value="0"></div>
+            <span class="vol-val" id="alabBrightnessVal"></span></label>
+          <label class="vol-label"><span class="vol-name">Bass</span>
+            <div class="vol-slider-wrap"><input type="range" id="alabBass" class="vol-slider" min="-3" max="3" step="0.5" value="0"></div>
+            <span class="vol-val" id="alabBassVal"></span></label>
+          <div class="vol-label">
+            <label class="vol-name" for="alabShift">Pitch</label>
+            <div class="vol-slider-wrap"><input type="range" id="alabShift" class="vol-slider" min="-100" max="100" step="1" value="0"></div>
+            <span class="vol-val" id="alabShiftVal"></span>
+            <button type="button" class="header-icon-btn" id="alabShiftToSa" hidden title="Move the whole recording so the dayan sits exactly on the Sa above">Tune to Sa</button>
+          </div>
+          <label class="vol-label"><span class="vol-name">Speed</span>
+            <div class="vol-slider-wrap"><input type="range" id="alabSpeed" class="vol-slider" min="75" max="125" step="1" value="100"></div>
+            <span class="vol-val" id="alabSpeedVal"></span></label>
+          <p class="modal-hint alab-note" id="alabSpeedNote" hidden>A video can&rsquo;t follow a speed change: you&rsquo;ll get the audio files only.</p>
+          <div class="vol-label">
+            <label class="alab-check alab-vol-check"><input type="checkbox" id="alabTanpuraOn"> Tanpura</label>
+            <div class="vol-slider-wrap"><input type="range" id="alabTanpuraDb" class="vol-slider" min="-30" max="-6" step="1" value="-16" disabled></div>
+            <span class="vol-val" id="alabTanpuraDbVal"></span>
+          </div>
+        </div>
+
+        <details class="alab-advanced">
+          <summary>More options</summary>
+          <div class="alab-advanced-body">
+            <label class="alab-field">
+              <span class="practice-label">Noise reduction</span>
+              <select id="alabDenoise" class="pitch-select small-select alab-setting">
+                <option value="auto" selected>Automatic</option>
+                <option value="on">Always</option>
+                <option value="off">Off</option>
+              </select>
+            </label>
+            <label class="alab-check"><input type="checkbox" id="alabHum" checked> Remove mains hum (50/60 Hz) when it is found</label>
+            <label class="alab-check"><input type="checkbox" id="alabMatchPitch"> Shift the lehra to the dayan&rsquo;s pitch if it is more than 20 cents off</label>
+            <label class="alab-check"><input type="checkbox" id="alabMatchTempo"> Stretch the lehra to the tabla&rsquo;s tempo if it is close</label>
+            <label class="alab-check"><input type="checkbox" id="alabDrums"> This is a full song &mdash; take out the drums first (slow)</label>
+            <p class="modal-hint alab-note" id="alabDrumsNote" hidden>Drum separation is not installed on this server.</p>
+            <label class="vol-label"><span class="vol-name">Fade in</span>
+              <div class="vol-slider-wrap"><input type="range" id="alabFadeIn" class="vol-slider" min="0" max="3000" step="100" value="0"></div>
+              <span class="vol-val" id="alabFadeInVal"></span></label>
+            <label class="vol-label"><span class="vol-name">Fade out</span>
+              <div class="vol-slider-wrap"><input type="range" id="alabFadeOut" class="vol-slider" min="0" max="6000" step="100" value="0"></div>
+              <span class="vol-val" id="alabFadeOutVal"></span></label>
+          </div>
+        </details>
+
+        <!-- 4 · output -->
+        <div class="panel-header alab-head"><h2 class="panel-title"><span class="alab-step" id="alabStepOutput">3</span> Video and sharing</h2></div>
+        <div class="alab-grid2">
+          <label class="alab-field"><span class="practice-label">Frame</span>
+            <select id="alabVideoFormat" class="pitch-select small-select alab-setting">
+              <option value="original" selected>As recorded</option>
+              <option value="vertical">9:16 (Reels, Shorts)</option>
+              <option value="square">Square</option>
+            </select></label>
+          <label class="alab-field alab-title-field"><span class="practice-label">Title</span>
+            <input type="text" id="alabTitle" class="text-input" maxlength="80" placeholder="e.g. Raag Bhimpalasi · Teentaal"></label>
+        </div>
+        <label class="alab-check"><input type="checkbox" id="alabAudioVideo"> For an audio-only recording, make a video with a waveform</label>
+        <label class="alab-check"><input type="checkbox" id="alabAbClip"> A before / after clip to share</label>
+
+        <div class="alab-actions">
+          <button type="button" class="btn-tap alab-go" id="alabGo" disabled>Clean up &amp; master</button>
+          <button type="button" class="header-icon-btn" id="alabCancel" hidden>Cancel</button>
+          <label class="alab-check"><input type="checkbox" id="alabNotify"> Tell me when it&rsquo;s ready</label>
+        </div>
+        <div class="alab-progress" id="alabProgress" hidden>
+          <div class="tool-progress" role="progressbar" id="alabProgressBar" aria-label="Progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="tool-bar" id="alabBar"></div>
+          </div>
+          <p class="alab-stage" id="alabStage" aria-live="polite"></p>
+          <p class="modal-hint alab-note" id="alabStageDetail"></p>
+        </div>
+        <p class="tool-status alab-error" id="alabError" role="alert" hidden></p>
+
+        <details class="alab-advanced alab-batch" id="alabBatch">
+          <summary>Several recordings with these settings</summary>
+          <div class="alab-advanced-body">
+            <label class="alab-field" for="alabBatchFiles"><span class="practice-label">Recordings</span>
+              <input type="file" id="alabBatchFiles" multiple accept="audio/*,video/*,.mp4,.mov,.m4a,.mp3,.wav,.flac"></label>
+            <ul class="alab-batch-list" id="alabBatchList"></ul>
+            <div class="alab-actions">
+              <button type="button" class="btn-tap" id="alabBatchStart" disabled>Master them all</button>
+              <button type="button" class="header-icon-btn" id="alabBatchStop" hidden>Stop after this one</button>
+              <button type="button" class="header-icon-btn" id="alabBatchClear" hidden>Clear the list</button>
+            </div>
+            <p class="modal-hint alab-note">One after another, each to the same target, so a series sounds alike. Lehra, trim and the other per-recording steps are not applied here.</p>
+          </div>
+        </details>
+      </section>
+
+      <section class="control-panel alab-panel alab-result" id="alabResult" aria-label="Your result" hidden>
+        <div class="panel-header">
+          <h2 class="panel-title" id="alabResultTitle">Your recording</h2>
+        </div>
+
+        <div class="alab-variants" id="alabVariants" role="radiogroup" aria-label="Version to listen to"></div>
+        <p class="modal-hint alab-note" id="alabVariantNote"></p>
+
+        <div class="alab-wave-box">
+          <canvas id="alabWave" class="alab-wave" aria-label="Waveform: click or drag to move through the recording"></canvas>
+        </div>
+        <div class="alab-transport">
+          <button class="btn-transport btn-play" id="alabPlay" title="Play / Pause" aria-label="Play">
+            <svg id="alabPlayIcon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+            <svg id="alabPauseIcon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="display:none"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
+          </button>
+          <span class="alab-time" id="alabTime">0:00 / 0:00</span>
+          <label class="alab-check"><input type="checkbox" id="alabMatch" checked> Match loudness</label>
+          <label class="alab-check"><input type="checkbox" id="alabPhone"> Phone speaker preview</label>
+        </div>
+        <p class="modal-hint alab-note" id="alabLoadNote" aria-live="polite"></p>
+
+        <ul class="alab-warnings" id="alabWarnings" hidden></ul>
+
+        <h3 class="alab-sub">Quality checks <small>(measured on the written file)</small></h3>
+        <ul class="alab-gates" id="alabGates"></ul>
+
+        <h3 class="alab-sub">At a glance</h3>
+        <div class="alab-tiles" id="alabTiles"></div>
+
+        <div class="alab-insights" id="alabInsights" hidden>
+          <h3 class="alab-sub">Your riyaz <small>(measured on the recording as played)</small></h3>
+          <div class="alab-tiles" data-insight="tiles"></div>
+          <figure class="alab-chart" data-insight="laya" hidden>
+            <canvas aria-label="Tempo over time"></canvas>
+            <figcaption>Tempo over the recording (BPM). The dashed line is your average; warm shading is rushing, cool is dragging.</figcaption>
+            <ul class="alab-sections"></ul>
+          </figure>
+          <figure class="alab-chart" data-insight="levels" hidden>
+            <canvas aria-label="Stroke levels"></canvas>
+            <figcaption>Each stroke&rsquo;s loudness against your loudest strokes. A tight band is an even hand.</figcaption>
+          </figure>
+          <div class="alab-chart" data-insight="types" hidden>
+            <div class="alab-types"></div>
+            <p class="modal-hint alab-note alab-type-note"></p>
+          </div>
+        </div>
+
+        <h3 class="alab-sub">Tonal balance <small><span class="alab-key before"></span> before <span class="alab-key after"></span> after, in dB relative to the whole</small></h3>
+        <p class="modal-hint alab-note" id="alabBandsNote"></p>
+        <div class="alab-bands" id="alabBands"></div>
+
+        <h3 class="alab-sub">Spectrogram</h3>
+        <div class="alab-specs">
+          <figure class="alab-spec"><canvas id="alabSpecBefore" aria-label="Spectrogram of the original"></canvas><figcaption>Before</figcaption></figure>
+          <figure class="alab-spec" id="alabSpecAfterBox"><canvas id="alabSpecAfter" aria-label="Spectrogram of the selected version"></canvas><figcaption>After</figcaption></figure>
+        </div>
+
+        <h3 class="alab-sub">What was done</h3>
+        <ul class="alab-decisions" id="alabDecisions"></ul>
+
+        <h3 class="alab-sub">Download</h3>
+        <div class="alab-downloads" id="alabDownloads"></div>
+
+        <div class="alab-actions alab-result-actions">
+          <button type="button" class="btn-tap" id="alabAnother">Process another recording</button>
+          <button type="button" class="header-icon-btn" id="alabDelete">Delete my files from the server now</button>
+        </div>
+        <p class="modal-hint modal-hint-last" id="alabExpires"></p>
+      </section>
+
+      <section class="control-panel alab-panel alab-about" aria-labelledby="alabAboutTitle">
+        <div class="panel-header"><h2 class="panel-title" id="alabAboutTitle">How it works</h2></div>
+        <ol class="alab-steps">
+          <li><strong>Measure.</strong> Loudness, peaks, clipping, noise, the balance across eight bands, the tempo and the pitch the dayan rings at &mdash; the moment you choose a recording.</li>
+          <li><strong>Prepare.</strong> Trim it, mark a noise-only stretch, and tap on sam to lock the lehra to your playing. A Swaralaya lehra is made at your tempo and Sa.</li>
+          <li><strong>Repair and shape.</strong> Clipped peaks are rebuilt, mains hum notched out and noise lightly reduced; then an EQ and compressor for your instrument, set from what was measured.</li>
+          <li><strong>Master.</strong> Taken to the loudness your platform plays at, with a true peak under &minus;1 dBTP, and checked again on the finished files.</li>
+          <li><strong>Riyaz.</strong> How steady your laya was, how even your strokes, how close to sam &mdash; measured, so you can see it across takes.</li>
+        </ol>
+        <p class="modal-hint">The numbers are measurements, not opinions: the EQ values are starting points, so listen to the versions and keep the one that sounds right on your phone. Recordings are deleted from the server after 24 hours, or sooner with the button above.</p>
+      </section>
+    </div>
+
     <!-- YOUR PROGRESS (/account, public/js/account/): riyaz and game scores,
          and — where sign-in is set up — an account to keep them across devices -->
     <div id="view-account" class="app-view" style="display: none;">
@@ -1117,6 +1497,7 @@
       <a href="/carnatic" data-target="view-carnatic" data-domain="carnatic">Carnatic Shruti &amp; Talam</a>
       <a href="/games" data-target="view-games" data-domain="games">Riyaz Games</a>
       <a href="/separator/">Stem Separator</a>
+      <a href="/audio" data-target="view-audio">Audio Lab</a>
     </nav>
     <div class="footer-meta">
       <span>Swaralaya — free practice tools for Indian classical music.</span>

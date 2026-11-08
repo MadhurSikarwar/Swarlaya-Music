@@ -3,7 +3,7 @@ import globals from 'globals';
 
 export default [
   {
-    ignores: ['public/separator/**', 'stem-frontend/**', 'node_modules/**'],
+    ignores: ['public/separator/**', 'stem-frontend/**', 'node_modules/**', 'public/js/vendor/**'],
   },
   js.configs.recommended,
   {

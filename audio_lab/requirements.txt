@@ -1,0 +1,18 @@
+# Audio Lab service (audio_lab/): Python 3.12 and ffmpeg (with libmp3lame) on the PATH.
+# Versions are the ones the tests were run with; the ranges allow patch updates.
+numpy>=1.26,<2
+scipy>=1.13,<2
+soundfile>=0.12
+librosa>=0.10.2,<0.11
+pedalboard>=0.9.23,<0.10
+pyloudnorm>=0.1.1
+noisereduce>=3.0
+fastapi>=0.110
+uvicorn>=0.30
+python-multipart>=0.0.9
+
+# Optional, switched on by the environment, never required:
+#   matchering   "make it sound like this" (reference track)
+#   demucs       take the drums out of a full song first (needs torch; large)
+# matchering>=2.0.6
+# demucs==4.0.1

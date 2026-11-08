@@ -10,6 +10,11 @@ Notation Editor, Carnatic suite. The Stem Separator's API (/api/…) needs the
 real server (Demucs), so it answers with a clear message instead:
 run `docker compose up --build` for the full site.
 
+The Audio Lab's API (/api/master/…) is forwarded to the audio_lab service,
+which you start separately (from webapp/):
+    python -m uvicorn audio_lab.server:app --port 8100
+Set AUDIO_LAB_URL to forward somewhere else.
+
 Usage (from webapp/):   python tools/dev_server.py [port]      default 3000
 Standard library only; Python 3.8+.
 
@@ -17,6 +22,7 @@ To check the static build (node tools/build-static.mjs) as a static host
 serves it — a page per route, robots.txt, sitemap.xml — pass its folder:
                         python tools/dev_server.py 3001 dist
 """
+import http.client
 import json
 import mimetypes
 import os
@@ -28,15 +34,34 @@ from urllib.parse import unquote, urlsplit
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # webapp/
 ROOT_FILES = {'sw.js', 'manifest.json', 'favicon.ico', 'robots.txt', 'sitemap.xml'}  # sitemap: static build only
-SPA_ROUTES = {'lehra', 'hindustani', 'carnatic', 'notation', 'practice', 'games', 'account'}
+SPA_ROUTES = {'lehra', 'hindustani', 'carnatic', 'notation', 'practice', 'games', 'account', 'audio'}
 TYPES = {  # explicit: Windows' registry maps some of these oddly (e.g. .aac)
     '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
     '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.txt': 'text/plain; charset=utf-8',
     '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json',
     '.aac': 'audio/aac', '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.woff2': 'font/woff2',
 }
+AUDIO_LAB_URL = os.environ.get('AUDIO_LAB_URL', 'http://127.0.0.1:8100')
+AUDIO_LAB_PREFIX = '/api/master'
+HOP_BY_HOP = {'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailers',
+              'transfer-encoding', 'upgrade', 'host', 'accept-encoding', 'cache-control'}
+AUDIO_LAB_MESSAGE = ('The Audio Lab service is not running. Start it from the webapp folder: '
+                     'python -m uvicorn audio_lab.server:app --port 8100')
 API_MESSAGE = ('The Stem Separator needs the full server (it runs Demucs). '
                'Start the site with Docker instead: docker compose up --build')
+
+
+class Body:
+    """The request body as a file-like object limited to `length` bytes, so uploads stream through un-buffered."""
+
+    def __init__(self, rfile, length):
+        self.rfile, self.left = rfile, length
+
+    def read(self, n=-1):
+        n = self.left if n is None or n < 0 else min(n, self.left)
+        data = self.rfile.read(n) if n else b''
+        self.left -= len(data)
+        return data
 
 
 def safe_join(base, rel):
@@ -68,6 +93,35 @@ class Handler(SimpleHTTPRequestHandler):
         if self.command != 'HEAD':
             self.wfile.write(body)
 
+    def proxy_audio_lab(self):
+        """Forward /api/master/… to the Audio Lab service, streaming both ways (uploads, server-sent events)."""
+        target = urlsplit(AUDIO_LAB_URL)
+        length = int(self.headers.get('Content-Length') or 0)
+        headers = {k: v for k, v in self.headers.items() if k.lower() not in HOP_BY_HOP}
+        try:
+            conn = http.client.HTTPConnection(target.hostname, target.port or 80, timeout=120)
+            conn.request(self.command, self.path, body=Body(self.rfile, length) if length else None, headers=headers)
+            upstream = conn.getresponse()
+        except OSError:
+            return self.send_json(503, {'error': AUDIO_LAB_MESSAGE, 'code': 'unavailable'})
+        self.send_response(upstream.status)
+        for key, value in upstream.getheaders():
+            if key.lower() not in HOP_BY_HOP:
+                self.send_header(key, value)
+        self.end_headers()      # (HTTP/1.0: the body ends when the connection closes)
+        try:
+            if self.command != 'HEAD':
+                while True:
+                    chunk = upstream.read1(65536)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    self.wfile.flush()
+        except (OSError, ValueError):
+            pass                # the browser went away (a closed event stream)
+        finally:
+            conn.close()
+
     def resolve(self, path):
         """Map a URL path to a file on disk (or None → 404), as StaticController does."""
         rel = unquote(path).lstrip('/')
@@ -97,6 +151,8 @@ class Handler(SimpleHTTPRequestHandler):
         path = urlsplit(self.path).path
         if path == '/health':  # the launcher waits for this
             return self.send_json(200, {'status': 'ok', 'server': 'dev (no stem separation)'})
+        if path == AUDIO_LAB_PREFIX or path.startswith(AUDIO_LAB_PREFIX + '/'):
+            return self.proxy_audio_lab()
         if path.startswith('/api/'):  # incl. /api/status: the pages check it to see if the separator is here
             return self.send_json(503, {'error': API_MESSAGE})
         target = self.resolve(path)
@@ -112,9 +168,12 @@ class Handler(SimpleHTTPRequestHandler):
         self.handle_get()
 
     def do_POST(self):
+        if urlsplit(self.path).path.startswith(AUDIO_LAB_PREFIX + '/'):
+            return self.proxy_audio_lab()
         self.send_json(503, {'error': API_MESSAGE})
 
     do_DELETE = do_POST
+    do_OPTIONS = do_POST
 
 
 class IPv6Server(ThreadingHTTPServer):
