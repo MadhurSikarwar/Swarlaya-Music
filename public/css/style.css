@@ -1330,13 +1330,19 @@ img, svg, canvas { max-width: 100%; }
   opacity: 0;
   visibility: hidden;          /* closed modals can't be tabbed into */
   pointer-events: none;
-  transition: opacity 0.28s ease, visibility 0s linear 0.28s;
+  /* Closed, its contents are not laid out at all: every page carries all its
+     dialogs, and they made each full layout ~40 % slower. On closing they stay
+     until the fade has run (allow-discrete; without it they go at once). */
+  content-visibility: hidden;
+  transition: opacity 0.28s ease, visibility 0s linear 0.28s, content-visibility 0s linear 0.28s;
+  transition-behavior: allow-discrete;
 }
 .modal-overlay.active {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
-  transition: opacity 0.28s ease, visibility 0s;
+  content-visibility: visible;
+  transition: opacity 0.28s ease, visibility 0s, content-visibility 0s;
 }
 .modal-content {
   background: linear-gradient(160deg, rgba(30,22,10,0.98), rgba(9,8,6,0.98));

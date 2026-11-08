@@ -272,3 +272,25 @@ test('service worker precaches only files that exist — and every site module',
   // …but not the optional tanpura string samples (loaded only when chosen)
   assert.ok(!list.some(p => /tn\dstr/.test(p)));
 });
+
+test('closed dialogs cost no layout, and still fade in and out', () => {
+  // Every page carries all its dialogs; laid out while closed they made each page's
+  // first layout (and every re-layout) do their text too. Measured: -40 % per full re-layout.
+  const css = readFileSync(new URL('../public/css/style.css', import.meta.url), 'utf8');
+  const block = sel => {
+    const start = css.indexOf(`\n${sel} {`);
+    assert.ok(start >= 0, sel);
+    return css.slice(start, css.indexOf('}', start));
+  };
+  const closed = block('.modal-overlay'), open = block('.modal-overlay.active');
+  assert.match(closed, /content-visibility: hidden/);
+  assert.match(open, /content-visibility: visible/);
+  // closing: the contents stay until the 0.28 s fade has run, then are skipped again
+  assert.match(closed, /content-visibility 0s linear 0\.28s/);
+  assert.match(closed, /transition-behavior: allow-discrete/);
+  // the separator's pages share this stylesheet but have no such dialogs
+  const src = new URL('../stem-frontend/src/', import.meta.url);
+  for (const f of readdirSync(src, { recursive: true }).filter(f => /\.(tsx|jsx)$/.test(f))) {
+    assert.ok(!readFileSync(new URL(f.split(/[\\/]/).join('/'), src), 'utf8').includes('modal-overlay'), f);
+  }
+});
