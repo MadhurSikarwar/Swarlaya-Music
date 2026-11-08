@@ -78,6 +78,31 @@ def use_bundled_lazy_stubs() -> None:
 
 use_bundled_lazy_stubs()
 
+# pedalboard's native module needs libatomic.so.1, which Vercel's runtime image
+# lacks; a copy is in native/ (see native/README.md). Loaded globally, it then
+# satisfies pedalboard's dependency by its soname.
+NATIVE = Path(__file__).resolve().parent / "native"
+
+
+def preload_libatomic() -> Optional[str]:
+    """Which libatomic is loaded: "system", "bundled", or None (not Linux, or not found)."""
+    if not sys.platform.startswith("linux"):
+        return None
+    import ctypes
+    try:
+        ctypes.CDLL("libatomic.so.1", mode=ctypes.RTLD_GLOBAL)
+        return "system"
+    except OSError:
+        pass
+    bundled = NATIVE / "libatomic.so.1"
+    if not bundled.exists():
+        return None
+    ctypes.CDLL(str(bundled), mode=ctypes.RTLD_GLOBAL)
+    return "bundled"
+
+
+preload_libatomic()
+
 # ── Constants ────────────────────────────────────────────────────────────────
 
 # Integrated loudness each destination normalises to ("custom" uses JobOptions.custom_lufs)
@@ -296,7 +321,8 @@ class JobOptions:
         o.shift_cents = num("shift_cents", -300.0, 300.0, o.shift_cents)
         o.tempo_factor = num("tempo_factor", 0.75, 1.25, o.tempo_factor)
         o.lehra_db = num("lehra_db", -20.0, 0.0, o.lehra_db)
-        o.offset_seconds = optional("offset_seconds", -30.0, 30.0)
+        # up to half a long lehra either way: the sync editor sends the offset modulo the lehra's length
+        o.offset_seconds = optional("offset_seconds", -3600.0, 3600.0)
         meta = raw.get("lehra_meta")
         if meta:
             if not isinstance(meta, dict):

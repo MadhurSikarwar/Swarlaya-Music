@@ -249,6 +249,8 @@ def test_ring_retention_drops_when_a_gate_eats_the_sustain():
 def test_options_are_validated_and_clamped():
     o = P.JobOptions.from_dict({"lehra_db": -50, "bass_db": 9, "target": "loud", "offset_seconds": "auto"})
     assert o.lehra_db == -20 and o.bass_db == 3 and o.target_lufs == -11 and o.offset_seconds is None
+    # the sync editor sends up to half the lehra's length: a 3m35s lehra can need ±107 s, not clamped to ±30
+    assert P.JobOptions.from_dict({"offset_seconds": -95.25}).offset_seconds == -95.25
     for bad in ({"target": "radio"}, {"lehra_db": "loud"}, {"variants": ["nope"]}, {"denoise": "maybe"}, {"bass_db": float("nan")}):
         with pytest.raises(P.AudioLabError) as e:
             P.JobOptions.from_dict(bad)

@@ -268,6 +268,29 @@ def test_lazy_stubs_stand_in_when_the_bundle_drops_pyi_files(tmp_path, monkeypat
     assert stubbed.twice(21) == 42
 
 
+def test_libatomic_is_loaded_from_the_bundle_only_when_the_system_has_none(monkeypatch):
+    # Vercel's image has no libatomic.so.1, so `from pedalboard import …` failed when mastering
+    import ctypes
+    loaded = []
+
+    def cdll(name, mode=0):
+        if name == "libatomic.so.1" and missing:
+            raise OSError("libatomic.so.1: cannot open shared object file")
+        loaded.append((name, mode))
+
+    monkeypatch.setattr(ctypes, "CDLL", cdll)
+    monkeypatch.setattr(sys, "platform", "linux")
+    missing = False
+    assert P.preload_libatomic() == "system" and loaded == [("libatomic.so.1", ctypes.RTLD_GLOBAL)]
+    loaded.clear()
+    missing = True
+    assert P.preload_libatomic() == "bundled"
+    assert loaded == [(str(P.NATIVE / "libatomic.so.1"), ctypes.RTLD_GLOBAL)]
+    assert (P.NATIVE / "libatomic.so.1").read_bytes()[:4] == b"\x7fELF"
+    monkeypatch.setattr(sys, "platform", "win32")
+    assert P.preload_libatomic() is None
+
+
 def test_the_bundled_librosa_stubs_are_librosas_own():
     pytest.importorskip("librosa")
     import librosa
