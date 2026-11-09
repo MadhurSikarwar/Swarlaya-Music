@@ -168,6 +168,9 @@ def test_analyse_then_master_by_version(client, store):
         assert f["download"].endswith("?download=1")
     assert lead["files"]["phone_bass.wav"]["pathname"].endswith("/my-take-phone-bass.wav")
     assert not list(S.TMP.glob("audio-lab-1111bbbb")), "the work folder is removed"
+    # every run's last line is also kept in Blob: a browser whose stream the edge cut collects it from there
+    for run_id, line in (("0000aaaa", res), ("1111bbbb", lead), ("2222cccc", other)):
+        assert json.loads(store[f"audio-lab/{JOB}/out/{run_id}/result.json"]) == line
 
 
 def test_run_limits(client, store, monkeypatch):
@@ -201,6 +204,24 @@ def test_bad_input_is_reported_and_the_lock_released(client, store):
     out = run(client)
     assert out[-1]["type"] == "error" and out[-1]["code"] in ("unreadable", "unsupported")
     assert S._busy.acquire(blocking=False)
+    S._busy.release()
+    assert json.loads(store[f"audio-lab/{JOB}/out/a1b2c3d4/result.json"]) == out[-1], "the error is kept too"
+
+
+def test_a_run_finishes_and_keeps_its_result_with_nobody_reading(store):
+    # On Vercel the edge cuts a browser's HTTP/2 stream after about a minute; the work must not depend on it
+    import asyncio
+    store[TABLA] = wav_bytes(synth.make_tabla(4))
+    req = S._validate_run({"job": JOB, "run": "3333dddd", "mode": "analyse", "inputs": {"tabla": TABLA}, "name": "t.wav"})
+    assert S._busy.acquire(blocking=False)
+
+    async def main():
+        task = S._start(req, asyncio.Queue())               # nobody ever reads its queue
+        await asyncio.wait_for(task, 240)
+
+    asyncio.run(main())
+    assert json.loads(store[f"audio-lab/{JOB}/out/3333dddd/result.json"])["type"] == "result"
+    assert S._busy.acquire(blocking=False), "the lock is given back"
     S._busy.release()
 
 
@@ -248,6 +269,19 @@ def test_the_worker_sees_the_same_packages(monkeypatch):
     env = S._worker_env()
     assert env["PYTHONPATH"].split(os.pathsep) == ["/var/task/_vendor", "/var/task", "/already/set"]
     assert env["PYTHONUNBUFFERED"] == "1"
+    # a function has one CPU: the worker yields it to this process, which streams the progress and the pings
+    assert env["AUDIO_LAB_NICE"] == "10"
+
+
+def test_the_worker_lowers_its_own_priority_when_asked(monkeypatch):
+    import audio_lab.worker as W
+    calls = []
+    monkeypatch.setattr(os, "nice", lambda n: calls.append(n) or n, raising=False)
+    monkeypatch.setenv("AUDIO_LAB_NICE", "10")
+    W.lower_priority()
+    monkeypatch.delenv("AUDIO_LAB_NICE")
+    W.lower_priority()
+    assert calls == [10]
 
 
 def test_lazy_stubs_stand_in_when_the_bundle_drops_pyi_files(tmp_path, monkeypatch):

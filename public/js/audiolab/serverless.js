@@ -90,9 +90,9 @@ function update(job, changes) {
   for (const fn of [...job.listeners]) fn(view);
 }
 
-function newJob({ kind, name, folder, inputs = {}, hasVideo = false, duration = null }) {
+function newJob({ kind, name, folder, inputs = {}, hasVideo = false, duration = null, blobOrigin = null }) {
   const job = {
-    id: hex(16), kind, name, folder, inputs: { ...inputs }, hasVideo, duration,
+    id: hex(16), kind, name, folder, inputs: { ...inputs }, hasVideo, duration, blobOrigin, kept: [],
     status: 'queued', stage: 'queued', progress: 0, message: 'Waiting for the studio', error: null,
     report: null, spectrograms: null, files: {}, outputs: [], created: Date.now() / 1000, rev: 0,
     listeners: new Set(), controllers: new Set(), gone: false,
@@ -106,7 +106,7 @@ function save(job) {
     localStorage.setItem(SAVED_KEY, JSON.stringify({
       id: job.id, kind: job.kind, name: job.name, folder: job.folder, inputs: job.inputs, created: job.created,
       report: job.report, spectrograms: job.spectrograms, files: job.files, outputs: job.outputs, hasVideo: job.hasVideo,
-      uploadMb: job.uploadMb,
+      uploadMb: job.uploadMb, blobOrigin: job.blobOrigin, kept: job.kept,
     }));
   } catch { /* storage full or unavailable: a reload just won't show it again */ }
 }
@@ -138,11 +138,13 @@ async function uploadAll(job, files, onProgress, signal) {
     // a new name for every upload: a replaced lehra must never be served from a cache as the old one
     const pathname = `audio-lab/${job.folder}/in/${role}-${hex(4)}.${ext}`;
     try {
-      await uploadPresigned(pathname, file, {
+      const res = await uploadPresigned(pathname, file, {
         access: 'public', handleUploadUrl: UPLOAD_URL, contentType: TYPES[ext], abortSignal: signal,
         multipart: file.size > 100 * MB,
         onUploadProgress: e => onProgress(Math.min(1, (sent + (e.loaded || 0)) / total)),
       });
+      // where the store serves files: the results of a run whose stream is cut are collected from there
+      try { job.blobOrigin ||= new URL(res.url).origin; } catch { /* no url: no recovery for this job */ }
     } catch (err) {
       if (signal.aborted) throw failure('Cancelled.', 'aborted');
       throw failure(`The upload failed: ${err && err.message ? err.message : 'the connection dropped'}.`, 'network');
@@ -165,6 +167,7 @@ export function createJob(files, options, onProgress = () => {}, { mode = 'maste
       const src = jobs.get(from) || restore(from);
       if (!src || src.gone || !src.inputs.tabla) throw failure('That analysed recording was not found. Upload it again.', 'not_found', 404);
       job = newJob({ kind: 'master', name: src.name, folder: src.folder, inputs: src.inputs, hasVideo: src.hasVideo,
+        blobOrigin: src.blobOrigin,
         duration: src.report?.duration_s ?? src.duration });
       job.uploadMb = src.uploadMb || 0;
       await uploadAll(job, { lehra: files.lehra, reference: files.reference, vocal: files.vocal }, onProgress, ctl.signal);
@@ -194,6 +197,22 @@ const pause = ms => new Promise(r => setTimeout(r, ms));
 async function call(job, body, onProgress) {
   const ctl = new AbortController();
   job.controllers.add(ctl);
+  const started = Date.now();
+  const kept = resultUrl(job, body.run);
+  if (kept) job.kept.push(resultPathname(job.folder, body.run));
+  let accepted = false, stalled = false, lastData = Date.now();
+  const watchdog = setInterval(() => {
+    if (Date.now() - lastData > STALL_MS) { stalled = true; ctl.abort(); }
+  }, 5000);
+  // The stream is cut (Vercel's edge ends a browser's HTTP/2 stream after about a minute), went quiet, or
+  // ended early: the work goes on on the server, which keeps its last line in Blob. Collect it from there.
+  const recover = async why => {
+    clearInterval(watchdog);
+    if (!accepted || !kept || (ctl.signal.aborted && !stalled) || job.gone) throw why;
+    onProgress(null, 'Still working — the live progress was cut off, checking for the result');
+    const deadline = started + ((health?.serverless?.budget_s ?? 280) + 30) * 1000;
+    return pollResult(kept, { deadline, gone: () => job.gone });
+  };
   try {
     let res;
     try {
@@ -209,6 +228,7 @@ async function call(job, body, onProgress) {
       try { err = await res.json(); } catch { /* not JSON */ }
       throw failure(err.error || `The studio answered ${res.status}.`, err.code || (res.status === 504 ? 'timeout' : 'server'), res.status);
     }
+    accepted = true;
     const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
     let buffer = '';
     for (;;) {
@@ -216,8 +236,10 @@ async function call(job, body, onProgress) {
       try {
         chunk = await reader.read();
       } catch {
-        throw failure('The connection to the studio dropped while it was working. Please try again.', ctl.signal.aborted ? 'aborted' : 'network');
+        return await recover(failure('The connection to the studio dropped while it was working. Please try again.',
+          ctl.signal.aborted && !stalled ? 'aborted' : 'network'));
       }
+      lastData = Date.now();
       if (chunk.done) break;
       buffer += chunk.value;
       let nl;
@@ -232,10 +254,41 @@ async function call(job, body, onProgress) {
         else if (msg.type === 'error') throw failure(msg.message, msg.code);
       }
     }
-    throw failure('The studio stopped before it finished (it may have run out of time). Try a shorter recording.', 'timeout');
+    return await recover(failure('The studio stopped before it finished (it may have run out of time). Try a shorter recording.', 'timeout'));
   } finally {
+    clearInterval(watchdog);
     job.controllers.delete(ctl);
   }
+}
+
+const STALL_MS = 35000;      // the server pings every 10 s: this long without a byte means the stream is gone
+const POLL_MS = 4000;
+
+const resultPathname = (folder, run) => `audio-lab/${folder}/out/${run}/result.json`;
+const resultUrl = (job, run) => (job.blobOrigin ? `${job.blobOrigin}/${resultPathname(job.folder, run)}` : null);
+
+/**
+ * Wait for a run's kept last line (out/<run>/result.json in Blob) until `deadline` (ms). Resolves the
+ * result; rejects with the run's own error, or with a timeout. 404s are not cached by Blob, and the
+ * query string keeps any cache out of the way.
+ */
+export async function pollResult(url, { deadline, gone = () => false, fetchImpl = (...a) => fetch(...a), every = POLL_MS, wait = pause }) {
+  while (!gone()) {
+    try {
+      const res = await fetchImpl(`${url}?t=${Date.now()}`, { cache: 'no-store' });
+      if (res.ok) {
+        const msg = await res.json();
+        if (msg && msg.type === 'result') return msg;
+        if (msg && msg.type === 'error') throw failure(msg.message, msg.code);
+      }
+    } catch (err) {
+      if (err && err.code && err.code !== 'network') throw err;    // the run's own error
+    }
+    if (Date.now() + every > deadline) break;
+    await wait(every);
+  }
+  if (gone()) throw failure('Cancelled.', 'aborted');
+  throw failure('The studio stopped before it finished (it may have run out of time). Try a shorter recording.', 'timeout');
 }
 
 /** call(), waiting and trying again while every server is busy with someone else's recording. */
@@ -264,7 +317,7 @@ async function runAnalysis(job) {
   try {
     const result = await callWhenFree(job, {
       job: job.folder, run: hex(8), mode: 'analyse', inputs: job.inputs, options: {}, name: job.name,
-    }, (p, message) => !job.gone && update(job, { progress: p, message: message || job.message }));
+    }, (p, message) => !job.gone && update(job, { progress: p ?? job.progress, message: message || job.message }));
     if (job.gone) return;
     job.files = result.files;
     job.outputs = Object.values(result.files).map(f => f.pathname);
@@ -357,8 +410,8 @@ export async function deleteJob(jobId) {
   job.gone = true;
   for (const c of job.controllers) c.abort();
   for (const other of jobs.values()) if (other.folder === job.folder) other.gone = true;   // they share the uploads
-  const paths = [...Object.values(job.inputs), ...job.outputs].filter(Boolean);
-  for (const other of jobs.values()) if (other.folder === job.folder) paths.push(...other.outputs);
+  const paths = [...Object.values(job.inputs), ...job.outputs, ...(job.kept || [])].filter(Boolean);
+  for (const other of jobs.values()) if (other.folder === job.folder) paths.push(...other.outputs, ...(other.kept || []));
   try { localStorage.removeItem(SAVED_KEY); } catch { /* unavailable */ }
   const res = await fetch(`${base}/delete`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ job: job.folder, paths: [...new Set(paths)] }),

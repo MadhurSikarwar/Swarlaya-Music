@@ -209,9 +209,13 @@ def _line(obj: dict) -> bytes:
 def _worker_env() -> dict:
     """The worker's environment. Vercel's Python runtime adds the function's packages to sys.path at
     start-up instead of installing them in site-packages, so a child Python sees none of them unless
-    this process's sys.path is handed over as PYTHONPATH."""
+    this process's sys.path is handed over as PYTHONPATH.
+
+    A function has one CPU, and the worker takes all it can: on Vercel this process, which streams the
+    progress and a ping every 10 s, was seen to send nothing for 73 s mid-run. The worker lowers its own
+    priority (AUDIO_LAB_NICE), so it still gets every spare cycle but this process runs when it must."""
     paths = [p for p in sys.path if p] + [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p]
-    return dict(os.environ, PYTHONUNBUFFERED="1", PYTHONPATH=os.pathsep.join(dict.fromkeys(paths)))
+    return dict(os.environ, PYTHONUNBUFFERED="1", PYTHONPATH=os.pathsep.join(dict.fromkeys(paths)), AUDIO_LAB_NICE="10")
 
 
 def _log_worker(work: Path, why: str) -> None:
@@ -252,22 +256,69 @@ async def run(request: Request) -> Response:
         return _error(e.status, e.code, e.message)
     except ValueError:
         return _error(400, "bad_request", "That request was not understood.")
-    return StreamingResponse(_work(req), media_type="application/x-ndjson",
-                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+    headers = {"Cache-Control": "no-store", "X-Accel-Buffering": "no"}
+    if not _busy.acquire(blocking=False):
+        busy = _line({"type": "error", "code": "busy", "message": "This server is busy with another recording.", "retry": True})
+        return StreamingResponse(iter([busy]), media_type="application/x-ndjson", headers=headers)
+    events: asyncio.Queue = asyncio.Queue()
+    _start(req, events)
+    return StreamingResponse(_relay(events), media_type="application/x-ndjson", headers=headers)
+
+
+# Runs going on now. Vercel's edge cuts a browser's HTTP/2 stream after about a minute (RST_STREAM CANCEL),
+# while the function goes on. So the work runs as a task of its own, which a dropped client cannot cancel,
+# and its last line (the result or the error) is also kept in Blob as out/<run>/result.json, where the
+# page collects it when its stream was cut. (The set keeps the tasks referenced until they end.)
+_tasks: set = set()
+
+
+def _start(req: dict, events: asyncio.Queue) -> asyncio.Task:
+    """Run one job in the background (the caller holds the lock; it is given back here)."""
+    async def drive():
+        try:
+            async for msg in _work(req):
+                if msg["type"] in ("result", "error"):
+                    await asyncio.to_thread(_keep_result, req, msg)
+                events.put_nowait(_line(msg))
+        finally:
+            _busy.release()
+            events.put_nowait(None)
+
+    task = asyncio.create_task(drive())
+    _tasks.add(task)
+    task.add_done_callback(_tasks.discard)
+    return task
+
+
+async def _relay(events: asyncio.Queue):
+    while (line := await events.get()) is not None:
+        yield line
+
+
+def _result_pathname(req: dict) -> str:
+    return f"{PREFIX}{req['job']}/out/{req['run']}/result.json"
+
+
+def _keep_result(req: dict, msg: dict) -> None:
+    path = TMP / f"audio-lab-result-{req['run']}.json"
+    try:
+        path.write_bytes(json.dumps(msg, separators=(",", ":")).encode("utf-8"))
+        _upload(path, _result_pathname(req))
+    except Exception as e:                                       # noqa: BLE001 — the stream still carries it
+        print(f"audio-lab: could not keep the result of run {req['run']}: {e!r}", file=sys.stderr)
+    finally:
+        path.unlink(missing_ok=True)
 
 
 async def _work(req: dict):
-    """One run, as JSON lines.  The lock is taken here, inside the stream, so it is always given back."""
-    if not _busy.acquire(blocking=False):
-        yield _line({"type": "error", "code": "busy", "message": "This server is busy with another recording.", "retry": True})
-        return
+    """One run, as messages (dicts): progress, pings, then a result or an error."""
     t0 = time.time()
     work = TMP / f"audio-lab-{req['run']}"
     proc: Optional[subprocess.Popen] = None
     try:
         shutil.rmtree(work, ignore_errors=True)
         (work / "in").mkdir(parents=True)
-        yield _line({"type": "progress", "stage": "fetch", "progress": 0.01, "message": "Fetching your recording"})
+        yield {"type": "progress", "stage": "fetch", "progress": 0.01, "message": "Fetching your recording"}
 
         # 1 ─ the inputs, from Blob
         local = {}
@@ -312,7 +363,7 @@ async def _work(req: dict):
             try:
                 raw = await asyncio.wait_for(lines.get(), timeout=min(10.0, left))
             except asyncio.TimeoutError:
-                yield _line({"type": "ping"})                       # keeps proxies from closing a quiet stream
+                yield {"type": "ping"}                         # keeps proxies from closing a quiet stream
                 continue
             if raw is None:
                 break
@@ -321,8 +372,8 @@ async def _work(req: dict):
             except ValueError:
                 continue
             if msg.get("type") == "progress":
-                yield _line({"type": "progress", "stage": msg.get("stage"), "message": str(msg.get("message", ""))[:200],
-                             "progress": round(0.05 + 0.85 * float(msg.get("progress", 0)), 3)})
+                yield {"type": "progress", "stage": msg.get("stage"), "message": str(msg.get("message", ""))[:200],
+                             "progress": round(0.05 + 0.85 * float(msg.get("progress", 0)), 3)}
             elif msg.get("type") in ("done", "error"):
                 final = msg
         await asyncio.to_thread(proc.wait)
@@ -344,22 +395,21 @@ async def _work(req: dict):
         stem = _safe_stem(req["name"])
         files = {}
         for i, name in enumerate(names):
-            yield _line({"type": "progress", "stage": "store", "progress": round(0.9 + 0.09 * i / max(1, len(names)), 3),
-                         "message": "Saving the results"})
+            yield {"type": "progress", "stage": "store", "progress": round(0.9 + 0.09 * i / max(1, len(names)), 3),
+                         "message": "Saving the results"}
             pathname = f"{PREFIX}{req['job']}/out/{req['run']}/{_out_name(name, stem)}"
             files[name] = await asyncio.to_thread(_upload, out / name, pathname)
-        yield _line({"type": "result", "kind": req["mode"], "report": report, "spectrograms": spectro, "files": files,
-                     "seconds": round(time.time() - t0, 1)})
+        yield {"type": "result", "kind": req["mode"], "report": report, "spectrograms": spectro, "files": files,
+                     "seconds": round(time.time() - t0, 1)}
     except AudioLabError as e:
-        yield _line({"type": "error", "code": e.code, "message": e.message})
+        yield {"type": "error", "code": e.code, "message": e.message}
     except Exception as e:                                       # noqa: BLE001 — the page shows a plain message
         _log_worker(work, repr(e))
-        yield _line({"type": "error", "code": "internal", "message": "Something went wrong on the server. Please try again."})
+        yield {"type": "error", "code": "internal", "message": "Something went wrong on the server. Please try again."}
     finally:
         if proc and proc.poll() is None:
             proc.kill()
         shutil.rmtree(work, ignore_errors=True)
-        _busy.release()
 
 
 async def delete(request: Request) -> Response:

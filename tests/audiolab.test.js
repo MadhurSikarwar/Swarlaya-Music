@@ -441,3 +441,53 @@ test('every part the sync editor looks up is in its modal', () => {
   assert.match(modal, /class="modal-overlay"/, 'the shared modal behaviour (Escape, focus) applies');
   assert.equal(modal.match(/data-nudge="/g).length, 4);
 });
+
+test('a cold server is given time to wake up, and the page hears that it is waking', async () => {
+  // On Vercel the first request after a deploy or a quiet spell starts the Python function,
+  // which took longer than the old fixed 6 s: the page then said there was no server at all.
+  const api = await import('../public/js/audiolab/api.js');
+  const realFetch = globalThis.fetch, realWindow = globalThis.window;
+  globalThis.window = { location: { hostname: 'swaralaya.example' } };
+  const timeouts = [];
+  globalThis.fetch = (url, { signal }) => new Promise((resolve, reject) => {
+    const t = setTimeout(() => resolve(new Response(JSON.stringify({ service: 'audio-lab', status: 'ok' }))), 80);
+    signal.addEventListener('abort', () => { clearTimeout(t); reject(new Error('aborted')); });
+  });
+  const realSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (fn, ms, ...rest) => { timeouts.push(ms); return realSetTimeout(fn, ms, ...rest); };
+  try {
+    let slow = 0;
+    const found = await api.detect({ onSlow: () => slow++, slowAfterMs: 20 });
+    assert.equal(found.ok, true);
+    assert.equal(slow, 1, 'told once that it is taking a while');
+    assert.ok(api.WAKE_TIMEOUT_MS >= 30000 && timeouts.includes(api.WAKE_TIMEOUT_MS), 'the site’s own server gets the long timeout');
+  } finally {
+    globalThis.fetch = realFetch;
+    globalThis.window = realWindow;
+    globalThis.setTimeout = realSetTimeout;
+  }
+});
+
+test('a run whose stream was cut is collected from the result the server kept', async () => {
+  // Vercel's edge ends a browser's HTTP/2 stream after about a minute while the function goes on; the
+  // server keeps its last line as out/<run>/result.json and the page waits for it there.
+  const { pollResult } = await import('../public/js/audiolab/serverless.js');
+  const url = 'https://store.example/audio-lab/f/out/r/result.json';
+  const asked = [];
+  const answers = [{ ok: false, status: 404 }, { ok: false, status: 404 },
+    { ok: true, json: async () => ({ type: 'result', kind: 'master', report: { ok: 1 }, files: {} }) }];
+  const fetchImpl = async (u, opts) => { asked.push([u, opts]); return answers.shift(); };
+  const msg = await pollResult(url, { deadline: Date.now() + 60000, fetchImpl, wait: async () => {} });
+  assert.deepEqual(msg.report, { ok: 1 });
+  assert.equal(asked.length, 3);
+  assert.ok(asked.every(([u, o]) => u.startsWith(`${url}?t=`) && o.cache === 'no-store'), 'past any cache');
+
+  // the run's own error is reported as such; a network hiccup is just tried again
+  const errs = [Promise.reject(new TypeError('Failed to fetch')),
+    { ok: true, json: async () => ({ type: 'error', code: 'gates_failed', message: 'Every version failed' }) }];
+  await assert.rejects(pollResult(url, { deadline: Date.now() + 60000, fetchImpl: () => errs.shift(), wait: async () => {} }),
+    e => e.code === 'gates_failed' && e.message === 'Every version failed');
+  // nothing kept by the deadline: a timeout
+  await assert.rejects(pollResult(url, { deadline: Date.now() + 10, fetchImpl: async () => ({ ok: false, status: 404 }), every: 5, wait: async () => {} }),
+    e => e.code === 'timeout');
+});

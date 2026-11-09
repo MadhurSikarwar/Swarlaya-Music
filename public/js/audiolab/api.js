@@ -33,25 +33,35 @@ async function getJson(url, { timeout = 6000 } = {}) {
 }
 
 /**
+ * How long the site's own address may take to answer /health. On Vercel the
+ * first request after a deploy or a quiet spell starts the Python function
+ * (a large bundle), which can take well over the usual few seconds.
+ */
+export const WAKE_TIMEOUT_MS = 45000;
+
+/**
  * Look for the service. Resolves { ok: true, info } once /health answers as
  * the Audio Lab (and remembers where), else { ok: false, reason }.
+ * `onSlow()` is called once if the answer takes longer than `slowAfterMs`.
  */
-export async function detect() {
-  let reason = 'unreachable';
-  for (const candidate of candidates()) {
-    try {
-      const { ok, body } = await getJson(`${candidate}/health`);
+export async function detect({ onSlow = () => {}, slowAfterMs = 4000 } = {}) {
+  const slow = setTimeout(onSlow, slowAfterMs);
+  try {
+    for (const [i, candidate] of candidates().entries()) {
+      // the site's own address may be waking up; the local fallback answers at once or is not there
+      const timeout = i === 0 ? WAKE_TIMEOUT_MS : 6000;
+      const { ok, body } = await getJson(`${candidate}/health`, { timeout }).catch(() => ({}));
       if (ok && body && body.service === 'audio-lab' && body.status === 'ok') {
         base = candidate;
         serverless = !!body.serverless;
         if (serverless) sls.configure(candidate, body);
         return { ok: true, info: body };
       }
-    } catch {
-      reason = 'unreachable';
     }
+    return { ok: false, reason: 'unreachable' };
+  } finally {
+    clearTimeout(slow);
   }
-  return { ok: false, reason };
 }
 
 export const isAvailable = () => base !== null;

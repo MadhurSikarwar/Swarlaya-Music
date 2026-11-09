@@ -13,6 +13,7 @@ process means a crash or a runaway job cannot take the server down, and the
 server can stop it by killing the process.
 """
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -21,7 +22,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from audio_lab.processing import AudioLabError, JobOptions, JobSpec, run_analysis, run_pipeline  # noqa: E402
 
 
+def lower_priority() -> None:
+    """Run at a lower priority if the server asks (AUDIO_LAB_NICE): ffmpeg started from here inherits it."""
+    try:
+        n = int(os.environ.get("AUDIO_LAB_NICE") or 0)
+        if n > 0 and hasattr(os, "nice"):
+            os.nice(n)
+    except (ValueError, OSError):
+        pass
+
+
 def main() -> int:
+    lower_priority()
     out = sys.stdout
     sys.stdout = sys.stderr            # stray prints from libraries must not corrupt the protocol
 

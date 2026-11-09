@@ -89,7 +89,9 @@ function showServer(text, { code = '', retry = false, ok = false } = {}) {
 
 async function findServer() {
   showServer('Looking for the audio studio…');
-  const found = await api.detect();
+  const found = await api.detect({
+    onSlow: () => showServer('Waking up the audio studio — the first visit in a while takes a few seconds…'),
+  });
   state.searched = true;
   if (found.ok) {
     state.info = found.info;
