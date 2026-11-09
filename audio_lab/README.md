@@ -184,7 +184,7 @@ browser ──POST /api/master/run──▶ api/master.py (audio_lab/serverless.
 * **One run per instance.** Vercel may send several requests to one instance; a second run there gets "busy" at
   once and the page tries again a few seconds later.
 * **Nothing is kept on the function.** The page holds the job (and its finished result in localStorage, so a reload
-  shows it again); the daily cron `/api/master/cleanup` deletes Blob files older than 24 hours, and "Delete now"
+  shows it again); each run first deletes expired Blob files (at most every 5 minutes per instance) and the daily cron `/api/master/cleanup` does too; on Vercel files are kept 6 hours (`AUDIO_LAB_TTL_HOURS`), as the free Blob store holds 1 GB and one master keeps ~75–100 MB, and "Delete now"
   deletes them at once.
 * **What it needs on the Vercel project:** a *public* Blob store connected to it (that sets `BLOB_STORE_ID` and
   `BLOB_READ_WRITE_TOKEN`), and `VERCEL_SUPPORT_LARGE_FUNCTIONS=1` (the Python bundle — librosa/numba, scipy, a static

@@ -82,7 +82,9 @@ MAX_ANALYSE_SECONDS = _env_float("AUDIO_LAB_MAX_ANALYSE_SECONDS", 900)
 BUDGET_S = _env_float("AUDIO_LAB_BUDGET_S", 280)                  # stop a run that is still going after this long
 MAX_UPLOAD_MB = _env_float("AUDIO_LAB_MAX_UPLOAD_MB", 150)
 MAX_SIDE_UPLOAD_MB = _env_float("AUDIO_LAB_MAX_SIDE_UPLOAD_MB", 50)
-TTL_HOURS = _env_float("AUDIO_LAB_TTL_HOURS", 24)
+# Blob on the free plan holds 1 GB in all and one 3-version master keeps ~75-100 MB: files are kept for hours, not a day
+TTL_HOURS = _env_float("AUDIO_LAB_TTL_HOURS", 6)
+SWEEP_EVERY_S = 300                 # a run first deletes what has expired, at most this often per instance
 # Each upload is an "advanced operation" (2,000 a month on the free plan) and a multipart upload is one per part
 # plus two, so files go up in one piece unless they are big, and then in big parts.
 SINGLE_PUT_MAX = 100 * MB
@@ -318,6 +320,7 @@ async def _work(req: dict):
     try:
         shutil.rmtree(work, ignore_errors=True)
         (work / "in").mkdir(parents=True)
+        await asyncio.to_thread(_sweep_now_and_then)
         yield {"type": "progress", "stage": "fetch", "progress": 0.01, "message": "Fetching your recording"}
 
         # 1 ─ the inputs, from Blob
@@ -405,6 +408,10 @@ async def _work(req: dict):
         yield {"type": "error", "code": e.code, "message": e.message}
     except Exception as e:                                       # noqa: BLE001 — the page shows a plain message
         _log_worker(work, repr(e))
+        if "quota" in str(e).lower():
+            yield {"type": "error", "code": "storage_full", "message": "The studio's storage is full right now. "
+                   "Files are deleted after a few hours, so please try again later."}
+            return
         yield {"type": "error", "code": "internal", "message": "Something went wrong on the server. Please try again."}
     finally:
         if proc and proc.poll() is None:
@@ -434,16 +441,33 @@ async def cleanup(request: Request) -> Response:
     if not _blob_ready():
         return _json({"deleted": 0})
 
-    def sweep() -> int:
-        blob = _blob()
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=TTL_HOURS)
-        old = [b.pathname for b in blob.query_blobs(prefix=PREFIX)
-               if (b.uploaded_at if b.uploaded_at.tzinfo else b.uploaded_at.replace(tzinfo=timezone.utc)) < cutoff]
-        for i in range(0, len(old), 1000):
-            blob.delete_blob(old[i:i + 1000])
-        return len(old)
+    return _json({"deleted": await asyncio.to_thread(_sweep)})
 
-    return _json({"deleted": await asyncio.to_thread(sweep)})
+
+def _sweep() -> int:
+    """Delete every Audio Lab file older than TTL_HOURS; returns how many."""
+    blob = _blob()
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=TTL_HOURS)
+    old = [b.pathname for b in blob.query_blobs(prefix=PREFIX)
+           if (b.uploaded_at if b.uploaded_at.tzinfo else b.uploaded_at.replace(tzinfo=timezone.utc)) < cutoff]
+    for i in range(0, len(old), 1000):
+        blob.delete_blob(old[i:i + 1000])
+    return len(old)
+
+
+_last_sweep = 0.0
+
+
+def _sweep_now_and_then() -> None:
+    """Before a run: the daily cron alone would let the 1 GB store fill up in an afternoon."""
+    global _last_sweep
+    if time.time() - _last_sweep < SWEEP_EVERY_S:
+        return
+    _last_sweep = time.time()
+    try:
+        _sweep()
+    except Exception as e:                                       # noqa: BLE001 — the run goes on regardless
+        print(f"audio-lab: sweep failed: {e!r}", file=sys.stderr)
 
 
 ROUTES = {("GET", "health"): health, ("POST", "run"): run, ("POST", "delete"): delete, ("GET", "cleanup"): cleanup}

@@ -366,3 +366,29 @@ def test_pipeline_split_runs(tmp_path):
     assert lead["insights"] and other["insights"] == {}
     # the shared measurements agree: each run measured the same input the same way
     assert lead["before"]["lufs"] == pytest.approx(other["before"]["lufs"])
+
+
+def test_expired_files_are_swept_before_a_run_and_a_full_store_is_said_plainly(monkeypatch):
+    # Blob on the free plan holds 1 GB and a 3-version master keeps ~75-100 MB, while the cron runs once a day:
+    # a run first clears what has expired (at most every few minutes), and a store that is still full says so.
+    import asyncio
+    assert S.TTL_HOURS <= 6
+    now = datetime.now(timezone.utc)
+    fake = FakeBlob([SimpleNamespace(pathname="audio-lab/a/out/r/x.wav", uploaded_at=now - timedelta(hours=S.TTL_HOURS + 1)),
+                     SimpleNamespace(pathname="audio-lab/b/in/tabla.wav", uploaded_at=now - timedelta(minutes=5))])
+    monkeypatch.setattr(S, "_blob", lambda: fake)
+    monkeypatch.setattr(S, "_last_sweep", 0.0)
+
+    def full(*a, **k):
+        raise RuntimeError("Vercel Blob: Storage quota exceeded for Hobby plan (1GB maximum)")
+
+    monkeypatch.setattr(S, "_download", full)
+    req = S._validate_run({"job": JOB, "run": "4444eeee", "inputs": {"tabla": TABLA}})
+
+    async def collect():
+        return [m async for m in S._work(req)]
+
+    out = asyncio.run(collect())
+    assert fake.deleted == ["audio-lab/a/out/r/x.wav"]
+    assert out[-1]["type"] == "error" and out[-1]["code"] == "storage_full", out[-1]
+    assert asyncio.run(collect()) and fake.deleted == ["audio-lab/a/out/r/x.wav"], "not swept again straight away"
