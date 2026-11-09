@@ -3,8 +3,9 @@
 A function has no disk that outlives a request, a 4.5 MB request body and a
 time limit (300 s on the free plan), so it works differently from server.py:
 
-* recordings go from the browser straight to Vercel Blob (a short-lived signed
-  URL from api/master-upload.js), under audio-lab/<job>/in/<role>.<ext>;
+* recordings go from the browser straight to the file store (Backblaze B2, through its
+  S3 API: a short-lived signed URL from /api/master/upload-url), under audio-lab/<job>/in/<role>.<ext>;
+  results are reached the same way, by signed links (audio_lab/s3.py);
 * one request runs one piece of work start to finish and streams its progress
   back as JSON lines (application/x-ndjson): fetch the inputs from Blob, run
   worker.py on them exactly as server.py does, put the results in Blob under
@@ -13,10 +14,11 @@ time limit (300 s on the free plan), so it works differently from server.py:
   page starts together and puts back together — see run_pipeline(lead=…).
 
 Nothing is kept here between requests: the job id (128 random bits, made by the
-page) is the only key, as in server.py.  Blob files older than a day are
-deleted by the daily cron (vercel.json → /api/master/cleanup).
+page) is the only key, as in server.py.  Files older than TTL_HOURS are deleted before
+each run and by the daily cron (vercel.json → /api/master/cleanup).
 
   GET  /api/master/health
+  POST /api/master/upload-url  JSON {pathname, size}  →  {url, pathname}: where the browser PUTs one recording
   POST /api/master/run       JSON {job, run, mode: analyse|master, inputs: {role: pathname}, options,
                              name, lead, require_pass}  →  JSON lines: progress…, then result or error
   POST /api/master/delete    JSON {job, paths: [pathname, …]}
@@ -51,6 +53,7 @@ from starlette.responses import JSONResponse, Response, StreamingResponse  # noq
 from starlette.routing import Route                               # noqa: E402
 
 from . import __version__                                         # noqa: E402
+from . import s3                                                  # noqa: E402
 from .processing import (ALLOWED_FORMATS, PROFILES, REVERBS, TANPURA_FILE, TARGETS, VARIANTS, AudioLabError,  # noqa: E402
                          JobOptions, probe)
 
@@ -82,19 +85,28 @@ MAX_ANALYSE_SECONDS = _env_float("AUDIO_LAB_MAX_ANALYSE_SECONDS", 900)
 BUDGET_S = _env_float("AUDIO_LAB_BUDGET_S", 280)                  # stop a run that is still going after this long
 MAX_UPLOAD_MB = _env_float("AUDIO_LAB_MAX_UPLOAD_MB", 150)
 MAX_SIDE_UPLOAD_MB = _env_float("AUDIO_LAB_MAX_SIDE_UPLOAD_MB", 50)
-# Blob on the free plan holds 1 GB in all and one 3-version master keeps ~75-100 MB: files are kept for hours, not a day
+# One 3-version master keeps ~75-100 MB, and the free store is 10 GB (Backblaze B2): files are kept for hours, not a day
 TTL_HOURS = _env_float("AUDIO_LAB_TTL_HOURS", 6)
 SWEEP_EVERY_S = 300                 # a run first deletes what has expired, at most this often per instance
-# Each upload is an "advanced operation" (2,000 a month on the free plan) and a multipart upload is one per part
-# plus two, so files go up in one piece unless they are big, and then in big parts.
-SINGLE_PUT_MAX = 100 * MB
-PART = 32 * MB
+LINK_S = int(min(7 * 86400, TTL_HOURS * 3600 + 1800))            # how long the page's links to results work
+UPLOAD_EXTENSIONS = {"wav", "mp3", "m4a", "aac", "flac", "ogg", "oga", "opus", "mp4", "mov", "mkv", "webm", "avi",
+                     "aif", "aiff", "wma", "caf"}
+# The pages that may upload to and play from the store (its CORS rules, set by this function)
+SITE_ORIGINS = [o.strip() for o in os.environ.get("AUDIO_LAB_SITE_ORIGINS", ",".join([
+    "https://swarlaya-music.vercel.app", "https://swarlaya-music-madhursikarwars-projects.vercel.app",
+    "https://swarlaya-music-git-main-madhursikarwars-projects.vercel.app",
+    "https://swarlaya-music-git-audio-lab-madhursikarwars-projects.vercel.app",
+    "http://localhost:3000", "http://localhost:3001"])).split(",") if o.strip()]
 
 _busy = threading.Lock()          # one piece of work per instance: the CPU is shared by everything an instance runs
 
 
+def _store() -> Optional[s3.Store]:
+    return s3.Store.from_env()
+
+
 def _blob_ready() -> bool:
-    return bool(os.environ.get("BLOB_READ_WRITE_TOKEN") or os.environ.get("BLOB_STORE_ID"))
+    return _store() is not None
 
 
 def _json(body: dict, status: int = 200) -> JSONResponse:
@@ -114,18 +126,12 @@ def _display_name(name: str) -> str:
     return (re.sub(r"[^A-Za-z0-9._ ()-]", "_", Path(name or "recording").name).strip(" .") or "recording")[:80]
 
 
-# ── Blob (the Python SDK: OIDC + BLOB_STORE_ID on Vercel, or BLOB_READ_WRITE_TOKEN) ────────────────────────────
-
-def _blob():
-    from vercel.blob import sync as blob
-    return blob
-
+# ── The file store (Backblaze B2 through its S3 API; audio_lab/s3.py) ────────────────────────────────────────
 
 def _download(pathname: str, dest: Path, limit_bytes: int) -> int:
-    blob = _blob()
     total = 0
-    with blob.stream_blob(pathname, access="public") as stream, dest.open("wb") as out:
-        for chunk in stream:
+    with _store().open(pathname) as stream, dest.open("wb") as out:
+        while chunk := stream.read(1 << 20):
             total += len(chunk)
             if total > limit_bytes:
                 raise AudioLabError("too_large", f"That file is larger than {limit_bytes // MB} MB.", 413)
@@ -134,24 +140,27 @@ def _download(pathname: str, dest: Path, limit_bytes: int) -> int:
 
 
 def _upload(path: Path, pathname: str) -> dict:
-    """Put a result in Blob; returns the URLs the page uses (to play it, and to save it)."""
-    blob = _blob()
-    mime = MIME.get(path.suffix.lower(), "application/octet-stream")
-    size = path.stat().st_size
-    if size <= SINGLE_PUT_MAX:
-        with path.open("rb") as f:
-            r = blob.put_blob(pathname, f, access="public", content_length=size, content_type=mime,
-                              allow_overwrite=True, cache_control_max_age=3600)
-    else:
-        with blob.multipart_upload_blob(pathname, access="public", content_type=mime, allow_overwrite=True,
-                                        cache_control_max_age=3600) as up, path.open("rb") as f:
-            while True:
-                part = f.read(PART)
-                if not part:
-                    break
-                up.upload_part(part)
-        r = up.result
-    return {"url": r.url, "download": r.download_url or r.url, "pathname": r.pathname}
+    """Put a result in the store; returns the links the page uses (to play it, and to save it)."""
+    store = _store()
+    store.put_file(pathname, path, MIME.get(path.suffix.lower(), "application/octet-stream"))
+    name = pathname.rsplit("/", 1)[-1]
+    return {"url": store.get_url(pathname, LINK_S), "download": store.get_url(pathname, LINK_S, download_name=name),
+            "pathname": pathname}
+
+
+_cors_done = False
+
+
+def _ensure_cors() -> None:
+    """The browser uploads to and plays from the store directly: its CORS rules must name the site (once per instance)."""
+    global _cors_done
+    if _cors_done:
+        return
+    try:
+        _store().put_cors(SITE_ORIGINS)
+        _cors_done = True
+    except Exception as e:                                       # noqa: BLE001 — set by hand in the B2 console instead
+        print(f"audio-lab: could not set the store's CORS rules: {e!r}", file=sys.stderr)
 
 
 # ── The routes ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -171,7 +180,7 @@ async def health(_request: Request) -> Response:
         "status": "ok" if _blob_ready() else "unconfigured",
         "service": "audio-lab", "version": __version__,
         "serverless": {"max_seconds": MAX_SECONDS, "budget_s": BUDGET_S, "tmp_free_mb": tmp_free,
-                       "upload_url": "/api/master-upload", "ttl_hours": TTL_HOURS},
+                       "upload_url": "/api/master/upload-url", "ttl_hours": TTL_HOURS},
         "limits": {"max_upload_mb": MAX_UPLOAD_MB, "max_side_upload_mb": MAX_SIDE_UPLOAD_MB,
                    "max_seconds": MAX_SECONDS, "ttl_hours": TTL_HOURS, "formats": sorted(ALLOWED_FORMATS)},
         "features": features(),
@@ -248,6 +257,25 @@ def _out_name(local: str, stem: str) -> str:
     return f"{stem}-{LABELS.get(p.stem, p.stem)}{p.suffix.lower()}"
 
 
+async def upload_url(request: Request) -> Response:
+    """A link the browser can PUT one recording to (for an hour), and nothing else."""
+    if not _blob_ready():
+        return _error(503, "unconfigured", "The audio studio's storage is not connected yet.")
+    try:
+        body = await request.json()
+    except ValueError:
+        return _error(400, "bad_request", "That request was not understood.")
+    pathname, size = str((body or {}).get("pathname", "")), (body or {}).get("size")
+    m = INPUT_RE.match(pathname)
+    if not m or m.group(3) not in UPLOAD_EXTENSIONS:
+        return _error(400, "bad_request", "That upload is not allowed.")
+    cap = MAX_UPLOAD_MB if m.group(2) in ("tabla", "recorder") else MAX_SIDE_UPLOAD_MB
+    if not isinstance(size, (int, float)) or size <= 0 or size > cap * MB:
+        return _error(413, "too_large", f"That file is larger than {cap:.0f} MB.")
+    await asyncio.to_thread(_ensure_cors)
+    return _json({"url": _store().upload_url(pathname, 3600), "pathname": pathname})
+
+
 async def run(request: Request) -> Response:
     if not _blob_ready():
         return _error(503, "unconfigured", "The audio studio's storage is not connected yet.")
@@ -278,6 +306,8 @@ def _start(req: dict, events: asyncio.Queue) -> asyncio.Task:
     """Run one job in the background (the caller holds the lock; it is given back here)."""
     async def drive():
         try:
+            # where the page collects the last line if its stream is cut (a signed link: the store is private)
+            events.put_nowait(_line({"type": "started", "result_url": _store().get_url(_result_pathname(req), LINK_S)}))
             async for msg in _work(req):
                 if msg["type"] in ("result", "error"):
                     await asyncio.to_thread(_keep_result, req, msg)
@@ -408,7 +438,7 @@ async def _work(req: dict):
         yield {"type": "error", "code": e.code, "message": e.message}
     except Exception as e:                                       # noqa: BLE001 — the page shows a plain message
         _log_worker(work, repr(e))
-        if "quota" in str(e).lower():
+        if any(w in str(e).lower() for w in ("quota", "cap_exceeded", "cap exceeded", "storage_cap")):
             yield {"type": "error", "code": "storage_full", "message": "The studio's storage is full right now. "
                    "Files are deleted after a few hours, so please try again later."}
             return
@@ -429,7 +459,7 @@ async def delete(request: Request) -> Response:
     if not JOB_RE.match(job) or any((m := OUTPUT_RE.match(p)) is None or m.group(1) != job for p in paths):
         return _error(400, "bad_request", "That request was not understood.")
     if paths and _blob_ready():
-        await asyncio.to_thread(_blob().delete_blob, paths)       # deleting is free; missing files are fine
+        await asyncio.to_thread(lambda: [_store().delete(p) for p in paths])   # missing files are fine
     return _json({"deleted": len(paths)})
 
 
@@ -446,12 +476,11 @@ async def cleanup(request: Request) -> Response:
 
 def _sweep() -> int:
     """Delete every Audio Lab file older than TTL_HOURS; returns how many."""
-    blob = _blob()
+    store = _store()
     cutoff = datetime.now(timezone.utc) - timedelta(hours=TTL_HOURS)
-    old = [b.pathname for b in blob.query_blobs(prefix=PREFIX)
-           if (b.uploaded_at if b.uploaded_at.tzinfo else b.uploaded_at.replace(tzinfo=timezone.utc)) < cutoff]
-    for i in range(0, len(old), 1000):
-        blob.delete_blob(old[i:i + 1000])
+    old = [item.key for item in store.list(PREFIX) if item.modified < cutoff]
+    for key in old:
+        store.delete(key)
     return len(old)
 
 
@@ -470,7 +499,7 @@ def _sweep_now_and_then() -> None:
         print(f"audio-lab: sweep failed: {e!r}", file=sys.stderr)
 
 
-ROUTES = {("GET", "health"): health, ("POST", "run"): run, ("POST", "delete"): delete, ("GET", "cleanup"): cleanup}
+ROUTES = {("GET", "health"): health, ("POST", "upload-url"): upload_url, ("POST", "run"): run, ("POST", "delete"): delete, ("GET", "cleanup"): cleanup}
 
 
 async def dispatch(request: Request) -> Response:

@@ -8,6 +8,7 @@ import io
 import json
 import os
 import shutil
+import time
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -39,7 +40,9 @@ def wav_bytes(x):
 def store(monkeypatch):
     """A fake Blob store: pathname → bytes."""
     files = {}
-    monkeypatch.setenv("BLOB_STORE_ID", "store_test")
+    for k, v in (("B2_ENDPOINT", "s3.us-west-004.example.invalid"), ("B2_BUCKET", "b"), ("B2_KEY_ID", "k"),
+                 ("B2_APPLICATION_KEY", "secret")):
+        monkeypatch.setenv(k, v)
 
     def download(pathname, dest, limit):
         if pathname not in files:
@@ -57,6 +60,7 @@ def store(monkeypatch):
 
     monkeypatch.setattr(S, "_download", download)
     monkeypatch.setattr(S, "_upload", upload)
+    monkeypatch.setattr(S, "_last_sweep", time.time())          # no store to sweep here
     return files
 
 
@@ -112,11 +116,13 @@ def test_probe_without_ffprobe_rejects_non_media(tmp_path, monkeypatch):
 # ── the function ────────────────────────────────────────────────────────────────────────────────────────
 
 def test_health(client, monkeypatch):
-    monkeypatch.delenv("BLOB_STORE_ID", raising=False)
-    monkeypatch.delenv("BLOB_READ_WRITE_TOKEN", raising=False)
+    for k in ("B2_ENDPOINT", "B2_BUCKET", "B2_KEY_ID", "B2_APPLICATION_KEY"):
+        monkeypatch.delenv(k, raising=False)
     h = client.get("/api/master/health").json()
     assert h["service"] == "audio-lab" and h["status"] == "unconfigured"      # the page then says "not connected"
-    monkeypatch.setenv("BLOB_STORE_ID", "store_x")
+    for k, v in (("B2_ENDPOINT", "s3.us-west-004.example.invalid"), ("B2_BUCKET", "b"), ("B2_KEY_ID", "k"),
+                 ("B2_APPLICATION_KEY", "secret")):
+        monkeypatch.setenv(k, v)
     h = client.get("/api/master?op=health").json()                             # how the vercel.json rewrite calls it
     assert h["status"] == "ok" and h["serverless"]["max_seconds"] == S.MAX_SECONDS
     assert h["features"]["demucs"] is False and "phone_bass" in h["features"]["variants"]
@@ -140,8 +146,8 @@ def test_run_rejects_bad_requests(client, store, body):
 
 
 def test_run_needs_storage(client, monkeypatch):
-    monkeypatch.delenv("BLOB_STORE_ID", raising=False)
-    monkeypatch.delenv("BLOB_READ_WRITE_TOKEN", raising=False)
+    for k in ("B2_ENDPOINT", "B2_BUCKET", "B2_KEY_ID", "B2_APPLICATION_KEY"):
+        monkeypatch.delenv(k, raising=False)
     r = client.post("/api/master/run", json={"job": JOB, "run": "a1b2c3d4", "inputs": {"tabla": TABLA}})
     assert r.status_code == 503 and r.json()["code"] == "unconfigured"
 
@@ -149,7 +155,7 @@ def test_run_needs_storage(client, monkeypatch):
 def test_analyse_then_master_by_version(client, store):
     store[TABLA] = wav_bytes(synth.make_tabla(8, mud_db=3))
     out = run(client, mode="analyse", run="0000aaaa")
-    assert out[0]["type"] == "progress" and out[-1]["type"] == "result", out[-1]
+    assert out[0]["type"] == "started" and out[1]["type"] == "progress" and out[-1]["type"] == "result", out[-1]
     res = out[-1]
     assert res["kind"] == "analyse"
     assert res["report"]["kind"] == "analysis" and "preview.mp3" in res["files"]
@@ -225,21 +231,20 @@ def test_a_run_finishes_and_keeps_its_result_with_nobody_reading(store):
     S._busy.release()
 
 
-class FakeBlob:
+class FakeStore:
     def __init__(self, listing):
         self.listing, self.deleted = listing, []
 
-    def query_blobs(self, prefix=None):
-        return [b for b in self.listing if b.pathname.startswith(prefix or "")]
+    def list(self, prefix):
+        return [i for i in self.listing if i.key.startswith(prefix)]
 
-    def delete_blob(self, paths):
-        self.deleted.extend([paths] if isinstance(paths, str) else paths)
+    def delete(self, key):
+        self.deleted.append(key)
 
 
 def test_delete_only_this_jobs_files(client, monkeypatch):
-    monkeypatch.setenv("BLOB_STORE_ID", "store_x")
-    fake = FakeBlob([])
-    monkeypatch.setattr(S, "_blob", lambda: fake)
+    fake = FakeStore([])
+    monkeypatch.setattr(S, "_store", lambda: fake)
     ok = [TABLA, f"audio-lab/{JOB}/out/1111bbbb/my-take-phone-bass.wav"]
     assert client.post("/api/master/delete", json={"job": JOB, "paths": ok}).json() == {"deleted": 2}
     assert fake.deleted == ok
@@ -249,12 +254,11 @@ def test_delete_only_this_jobs_files(client, monkeypatch):
 
 
 def test_cleanup_deletes_only_old_files(client, monkeypatch):
-    monkeypatch.setenv("BLOB_STORE_ID", "store_x")
     now = datetime.now(timezone.utc)
-    fake = FakeBlob([SimpleNamespace(pathname="audio-lab/a/in/tabla.wav", uploaded_at=now - timedelta(hours=30)),
-                     SimpleNamespace(pathname="audio-lab/b/in/tabla.wav", uploaded_at=now - timedelta(hours=2)),
-                     SimpleNamespace(pathname="other/keep.png", uploaded_at=now - timedelta(days=90))])
-    monkeypatch.setattr(S, "_blob", lambda: fake)
+    fake = FakeStore([SimpleNamespace(key="audio-lab/a/in/tabla.wav", modified=now - timedelta(hours=30)),
+                     SimpleNamespace(key="audio-lab/b/in/tabla.wav", modified=now - timedelta(hours=2)),
+                     SimpleNamespace(key="other/keep.png", modified=now - timedelta(days=90))])
+    monkeypatch.setattr(S, "_store", lambda: fake)
     monkeypatch.setenv("CRON_SECRET", "s3cret")
     assert client.get("/api/master/cleanup").status_code == 401
     r = client.get("/api/master/cleanup", headers={"Authorization": "Bearer s3cret"})
@@ -341,13 +345,13 @@ def test_vercel_config_matches_the_function():
     assert cfg["functions"]["api/master.py"]["maxDuration"] >= S.BUDGET_S + 10
     assert {"source": "/api/master/:op", "destination": "/api/master?op=:op"} in cfg["rewrites"]
     assert any(c["path"] == "/api/master/cleanup" for c in cfg["crons"])
-    assert (root / "api" / "master.py").exists() and (root / "api" / "master-upload.js").exists()
+    assert (root / "api" / "master.py").exists() and not (root / "api" / "master-upload.js").exists()
     excluded = cfg["functions"]["api/master.py"]["excludeFiles"]
     assert "assets/*.aac" in excluded and "assets/**" not in excluded            # the tanpura stays in the bundle
     assert len(excluded) <= 256                                                  # Vercel's schema rejects a longer excludeFiles
     import tomllib
     deps = {d.split("==")[0] for d in tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]["dependencies"]}
-    assert {"imageio-ffmpeg", "vercel-blob", "starlette", "librosa", "pedalboard"} <= deps
+    assert {"imageio-ffmpeg", "starlette", "librosa", "pedalboard"} <= deps
     assert not deps & {"demucs", "torch", "fastapi"}       # too big for a function / a framework Vercel would detect
 
 
@@ -374,9 +378,9 @@ def test_expired_files_are_swept_before_a_run_and_a_full_store_is_said_plainly(m
     import asyncio
     assert S.TTL_HOURS <= 6
     now = datetime.now(timezone.utc)
-    fake = FakeBlob([SimpleNamespace(pathname="audio-lab/a/out/r/x.wav", uploaded_at=now - timedelta(hours=S.TTL_HOURS + 1)),
-                     SimpleNamespace(pathname="audio-lab/b/in/tabla.wav", uploaded_at=now - timedelta(minutes=5))])
-    monkeypatch.setattr(S, "_blob", lambda: fake)
+    fake = FakeStore([SimpleNamespace(key="audio-lab/a/out/r/x.wav", modified=now - timedelta(hours=S.TTL_HOURS + 1)),
+                     SimpleNamespace(key="audio-lab/b/in/tabla.wav", modified=now - timedelta(minutes=5))])
+    monkeypatch.setattr(S, "_store", lambda: fake)
     monkeypatch.setattr(S, "_last_sweep", 0.0)
 
     def full(*a, **k):
@@ -392,3 +396,24 @@ def test_expired_files_are_swept_before_a_run_and_a_full_store_is_said_plainly(m
     assert fake.deleted == ["audio-lab/a/out/r/x.wav"]
     assert out[-1]["type"] == "error" and out[-1]["code"] == "storage_full", out[-1]
     assert asyncio.run(collect()) and fake.deleted == ["audio-lab/a/out/r/x.wav"], "not swept again straight away"
+
+
+def test_uploads_go_to_the_store_by_signed_link_for_this_jobs_inputs_only(client, store):
+    r = client.post("/api/master/upload-url", json={"pathname": f"audio-lab/{JOB}/in/tabla-1a2b3c4d.mp4", "size": 11 * S.MB})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["pathname"] == f"audio-lab/{JOB}/in/tabla-1a2b3c4d.mp4"
+    assert body["url"].startswith(f"https://s3.us-west-004.example.invalid/b/audio-lab/{JOB}/in/tabla-1a2b3c4d.mp4?")
+    assert "X-Amz-Signature=" in body["url"] and "secret" not in body["url"]
+    for bad in ({"pathname": f"audio-lab/{JOB}/out/x.wav", "size": 10}, {"pathname": f"audio-lab/{JOB}/in/tabla.exe", "size": 10},
+                {"pathname": "elsewhere/tabla.wav", "size": 10}):
+        assert client.post("/api/master/upload-url", json=bad).status_code == 400, bad
+    too_big = {"pathname": f"audio-lab/{JOB}/in/lehra.mp3", "size": (S.MAX_SIDE_UPLOAD_MB + 1) * S.MB}
+    assert client.post("/api/master/upload-url", json=too_big).status_code == 413
+
+
+def test_a_run_says_first_where_its_result_will_be_kept(client, store):
+    store[TABLA] = b"not audio at all" * 200
+    out = run(client, run="5555ffff")
+    assert out[0]["type"] == "started"
+    assert out[0]["result_url"].startswith(f"https://s3.us-west-004.example.invalid/b/audio-lab/{JOB}/out/5555ffff/result.json?")

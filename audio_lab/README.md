@@ -168,15 +168,16 @@ The same pipeline runs as a Vercel Function, so the site needs no other server. 
 takes at most 4.5 MB per request and stops after 300 s (free plan: 2 GB, one CPU), so the parts move:
 
 ```
-browser ──(signed URL from api/master-upload.js)──▶ Vercel Blob   audio-lab/<job>/in/<role>-<id>.<ext>
+browser ──(signed PUT link from /api/master/upload-url)──▶ Backblaze B2   audio-lab/<job>/in/<role>-<id>.<ext>
 browser ──POST /api/master/run──▶ api/master.py (audio_lab/serverless.py)
-              fetch the inputs from Blob → worker.py (exactly as server.py runs it) → results to Blob
-              ◀── progress as JSON lines, then the report and the files' URLs
+              fetch the inputs from B2 → worker.py (exactly as server.py runs it) → results to B2
+              ◀── progress as JSON lines, then the report and signed links to the files
 ```
 
-* **Uploads** go from the browser straight to Blob (`public/js/vendor/vercel-blob-client.js`, the official
-  `uploadPresigned`); the URL it uses can upload one pathname, of a capped size, for 30 minutes. No credential
-  reaches the browser.
+* **Files** live in a private Backblaze B2 bucket, reached through its S3 API by `audio_lab/s3.py` (standard library
+  only: SigV4 presigned URLs). The browser uploads with a link that can put one pathname for an hour, and plays and
+  downloads with links that last as long as the files are kept. No credential reaches the browser. The function
+  sets the bucket's CORS rules itself (`AUDIO_LAB_SITE_ORIGINS`), once per instance.
 * **Long recordings** are mastered as several runs at once, one or two versions each (`planRuns` in `format.js`,
   from the measured cost: ~0.25 s per second of audio per run plus ~0.5 s per version, ×1.5 for a slower CPU).
   Only the first ("lead") run makes the shared files — the riyaz insights, the loudness-matched original, the
@@ -184,19 +185,20 @@ browser ──POST /api/master/run──▶ api/master.py (audio_lab/serverless.
 * **One run per instance.** Vercel may send several requests to one instance; a second run there gets "busy" at
   once and the page tries again a few seconds later.
 * **Nothing is kept on the function.** The page holds the job (and its finished result in localStorage, so a reload
-  shows it again); each run first deletes expired Blob files (at most every 5 minutes per instance) and the daily cron `/api/master/cleanup` does too; on Vercel files are kept 6 hours (`AUDIO_LAB_TTL_HOURS`), as the free Blob store holds 1 GB and one master keeps ~75–100 MB, and "Delete now"
+  shows it again); each run first deletes expired files (at most every 5 minutes per instance) and the daily cron `/api/master/cleanup` does too; files are kept 6 hours (`AUDIO_LAB_TTL_HOURS`; one master keeps ~75–100 MB), and "Delete now"
   deletes them at once.
-* **What it needs on the Vercel project:** a *public* Blob store connected to it (that sets `BLOB_STORE_ID` and
-  `BLOB_READ_WRITE_TOKEN`), and `VERCEL_SUPPORT_LARGE_FUNCTIONS=1` (the Python bundle — librosa/numba, scipy, a static
+* **What it needs on the Vercel project:** `B2_ENDPOINT` (the bucket's S3 endpoint, e.g.
+  `s3.us-west-004.backblazeb2.com`), `B2_BUCKET`, `B2_KEY_ID` and `B2_APPLICATION_KEY` (an application key that may
+  read, write and set the bucket's CORS — "all buckets", read and write), and `VERCEL_SUPPORT_LARGE_FUNCTIONS=1` (the Python bundle — librosa/numba, scipy, a static
   ffmpeg — is ~700 MB, over the 500 MB standard limit). Optional: `CRON_SECRET` (then only Vercel Cron can run the
   clean-up), `AUDIO_LAB_MAX_SECONDS` (200), `AUDIO_LAB_BUDGET_S` (280), `AUDIO_LAB_MAX_UPLOAD_MB` (150).
 * **Dependencies:** the root `pyproject.toml` + `uv.lock` are this function's alone (Vercel installs them for
-  `api/master.py`); `package.json` gains only `@vercel/blob` for the upload function. The Docker images do not use them.
-* **Limits on the free plan:** recordings up to 3 min 20 s (after a trim; a 3-minute video peaks at 1.6 GB of the 2 GB), uploads up to 150 MB; Blob allows 1 GB
-  stored, 10 GB transferred and 2,000 uploads a month (a job is ~10–17 uploads; files are deleted after a day), and
-  functions 4 hours of CPU a month — the tightest: roughly 50–80 one-minute clips, or ~25 three-minute recordings
-  (estimates from the timings above). No drum separation (PyTorch does not fit a function). Going over a Blob limit
-  pauses Blob for the rest of the 30 days; Vercel e-mails before that.
+  `api/master.py`; `vercel-blob` there is left over from when files were in Vercel Blob). The Docker images do not use them.
+* **Limits on the free plan:** recordings up to 3 min 20 s (after a trim; a 3-minute video peaks at 1.6 GB of the 2 GB), uploads up to 150 MB; B2's free tier
+  stores 10 GB, with daily caps on downloads and calls (a free account without a card: 1 GB downloaded a day), and
+  Vercel functions have 4 hours of CPU a month — the tightest: roughly 50–80 one-minute clips, or ~25 three-minute
+  recordings (estimates from the timings above). No drum separation (PyTorch does not fit a function). (Vercel Blob,
+  used before, paused the whole store for the month once its free allowance was used up.)
 
 ## Safety
 

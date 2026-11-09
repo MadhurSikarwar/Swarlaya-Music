@@ -8,8 +8,7 @@
     "api/master.py": {
       "maxDuration": 300,
       "excludeFiles": "{assets/*.aac,assets/tn*.wav,public/**,dist/**,node_modules/**,stem-frontend/**,drogon_server/**,tests/**,tools/**,audio_lab/tests/**,.github/**,uploads/**,separated/**,audio_cache/**,*.html,*.md}"
-    },
-    "api/master-upload.js": { "maxDuration": 15 }
+    }
   },
   "crons": [
     { "path": "/api/master/cleanup", "schedule": "17 4 * * *" }

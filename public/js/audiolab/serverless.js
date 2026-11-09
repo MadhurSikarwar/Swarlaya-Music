@@ -2,20 +2,20 @@
  * The Audio Lab on Vercel (audio_lab/serverless.py): the same calls as api.js
  * makes to the Docker service, for a server that keeps nothing between requests.
  *
- *   upload    each recording goes straight to Vercel Blob (a signed URL from
- *             /api/master-upload; the browser never holds a credential), under
- *             audio-lab/<job>/in/<role>.<ext> — <job> is 128 random bits made here
+ *   upload    each recording goes straight to the file store (Backblaze B2: a signed
+ *             PUT link from /api/master/upload-url; the browser never holds a
+ *             credential), under audio-lab/<job>/in/<role>.<ext> — <job> is 128
+ *             random bits made here
  *   run       POST /api/master/run streams one run's progress as JSON lines and
- *             ends with its report and the Blob URLs of its files
+ *             ends with its report and signed links to its files
  *   split     a long recording is mastered as several runs at once (planRuns),
  *             retried when a server is busy, and put back together (mergeRuns)
  *
  * The job's state lives in this page (and its finished result in localStorage,
- * so a reload can show it again); the files are deleted from Blob after a day.
+ * so a reload can show it again); the files are deleted after a few hours.
  */
 import { keptSeconds, mergeRuns, planRuns } from './format.js';
 
-const UPLOAD_URL = '/api/master-upload';
 const MB = 1024 * 1024;
 const SAVED_KEY = 'swaralaya.audiolab.serverlessJob';
 const BUSY_RETRY_MS = [3000, 6000];
@@ -90,9 +90,9 @@ function update(job, changes) {
   for (const fn of [...job.listeners]) fn(view);
 }
 
-function newJob({ kind, name, folder, inputs = {}, hasVideo = false, duration = null, blobOrigin = null }) {
+function newJob({ kind, name, folder, inputs = {}, hasVideo = false, duration = null }) {
   const job = {
-    id: hex(16), kind, name, folder, inputs: { ...inputs }, hasVideo, duration, blobOrigin, kept: [],
+    id: hex(16), kind, name, folder, inputs: { ...inputs }, hasVideo, duration, kept: [],
     status: 'queued', stage: 'queued', progress: 0, message: 'Waiting for the studio', error: null,
     report: null, spectrograms: null, files: {}, outputs: [], created: Date.now() / 1000, rev: 0,
     listeners: new Set(), controllers: new Set(), gone: false,
@@ -106,7 +106,7 @@ function save(job) {
     localStorage.setItem(SAVED_KEY, JSON.stringify({
       id: job.id, kind: job.kind, name: job.name, folder: job.folder, inputs: job.inputs, created: job.created,
       report: job.report, spectrograms: job.spectrograms, files: job.files, outputs: job.outputs, hasVideo: job.hasVideo,
-      uploadMb: job.uploadMb, blobOrigin: job.blobOrigin, kept: job.kept,
+      uploadMb: job.uploadMb, kept: job.kept,
     }));
   } catch { /* storage full or unavailable: a reload just won't show it again */ }
 }
@@ -130,29 +130,46 @@ function restore(id) {
 async function uploadAll(job, files, onProgress, signal) {
   const list = Object.entries(files).filter(([, f]) => f);
   if (!list.length) return;
-  const { uploadPresigned } = await import('../vendor/vercel-blob-client.js');
-  const total = list.reduce((s, [, f]) => s + f.size, 0) || 1;
+  const total = list.reduce((sum, [, f]) => sum + f.size, 0) || 1;
   let sent = 0;
   for (const [role, file] of list) {
     const ext = storedExtension(file);
     // a new name for every upload: a replaced lehra must never be served from a cache as the old one
     const pathname = `audio-lab/${job.folder}/in/${role}-${hex(4)}.${ext}`;
+    let link;
     try {
-      const res = await uploadPresigned(pathname, file, {
-        access: 'public', handleUploadUrl: UPLOAD_URL, contentType: TYPES[ext], abortSignal: signal,
-        multipart: file.size > 100 * MB,
-        onUploadProgress: e => onProgress(Math.min(1, (sent + (e.loaded || 0)) / total)),
+      const res = await fetch(`${base}/upload-url`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, cache: 'no-store', signal,
+        body: JSON.stringify({ pathname, size: file.size }),
       });
-      // where the store serves files: the results of a run whose stream is cut are collected from there
-      try { job.blobOrigin ||= new URL(res.url).origin; } catch { /* no url: no recovery for this job */ }
+      link = await res.json().catch(() => ({}));
+      if (!res.ok) throw failure(link.error || `The studio answered ${res.status}.`, link.code || 'server', res.status);
     } catch (err) {
       if (signal.aborted) throw failure('Cancelled.', 'aborted');
-      throw failure(`The upload failed: ${err && err.message ? err.message : 'the connection dropped'}.`, 'network');
+      if (err && err.code) throw err;
+      throw failure('The upload failed: the connection dropped.', 'network');
     }
+    await putFile(link.url, file, TYPES[ext], signal, loaded => onProgress(Math.min(1, (sent + loaded) / total)));
     job.inputs[role] = pathname;
     sent += file.size;
     onProgress(sent / total);
   }
+}
+
+/** PUT a file to a signed link, with upload progress (fetch has none). */
+function putFile(url, file, type, signal, onLoaded) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url);
+    if (type) xhr.setRequestHeader('Content-Type', type);
+    xhr.upload.onprogress = e => onLoaded(e.loaded || 0);
+    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve()
+      : reject(failure(`The upload failed (the store answered ${xhr.status}).`, 'network', xhr.status)));
+    xhr.onerror = () => reject(failure('The upload failed: the connection dropped.', 'network'));
+    xhr.onabort = () => reject(failure('Cancelled.', 'aborted'));
+    signal.addEventListener('abort', () => xhr.abort(), { once: true });
+    xhr.send(file);
+  });
 }
 
 /**
@@ -167,7 +184,6 @@ export function createJob(files, options, onProgress = () => {}, { mode = 'maste
       const src = jobs.get(from) || restore(from);
       if (!src || src.gone || !src.inputs.tabla) throw failure('That analysed recording was not found. Upload it again.', 'not_found', 404);
       job = newJob({ kind: 'master', name: src.name, folder: src.folder, inputs: src.inputs, hasVideo: src.hasVideo,
-        blobOrigin: src.blobOrigin,
         duration: src.report?.duration_s ?? src.duration });
       job.uploadMb = src.uploadMb || 0;
       await uploadAll(job, { lehra: files.lehra, reference: files.reference, vocal: files.vocal }, onProgress, ctl.signal);
@@ -198,8 +214,8 @@ async function call(job, body, onProgress) {
   const ctl = new AbortController();
   job.controllers.add(ctl);
   const started = Date.now();
-  const kept = resultUrl(job, body.run);
-  if (kept) job.kept.push(resultPathname(job.folder, body.run));
+  let kept = null;                          // where the server keeps the run's last line (its "started" line says)
+  job.kept.push(resultPathname(job.folder, body.run));
   let accepted = false, stalled = false, lastData = Date.now();
   const watchdog = setInterval(() => {
     if (Date.now() - lastData > STALL_MS) { stalled = true; ctl.abort(); }
@@ -249,7 +265,8 @@ async function call(job, body, onProgress) {
         if (!line) continue;
         let msg;
         try { msg = JSON.parse(line); } catch { continue; }
-        if (msg.type === 'progress') onProgress(msg.progress, msg.message);
+        if (msg.type === 'started') kept = msg.result_url || null;
+        else if (msg.type === 'progress') onProgress(msg.progress, msg.message);
         else if (msg.type === 'result') return msg;
         else if (msg.type === 'error') throw failure(msg.message, msg.code);
       }
@@ -265,17 +282,15 @@ const STALL_MS = 35000;      // the server pings every 10 s: this long without a
 const POLL_MS = 4000;
 
 const resultPathname = (folder, run) => `audio-lab/${folder}/out/${run}/result.json`;
-const resultUrl = (job, run) => (job.blobOrigin ? `${job.blobOrigin}/${resultPathname(job.folder, run)}` : null);
 
 /**
- * Wait for a run's kept last line (out/<run>/result.json in Blob) until `deadline` (ms). Resolves the
- * result; rejects with the run's own error, or with a timeout. 404s are not cached by Blob, and the
- * query string keeps any cache out of the way.
+ * Wait for a run's kept last line (out/<run>/result.json in the store) until `deadline` (ms). Resolves the
+ * result; rejects with the run's own error, or with a timeout.
  */
 export async function pollResult(url, { deadline, gone = () => false, fetchImpl = (...a) => fetch(...a), every = POLL_MS, wait = pause }) {
   while (!gone()) {
     try {
-      const res = await fetchImpl(`${url}?t=${Date.now()}`, { cache: 'no-store' });
+      const res = await fetchImpl(url, { cache: 'no-store' });    // a signed link: nothing may be added to it
       if (res.ok) {
         const msg = await res.json();
         if (msg && msg.type === 'result') return msg;

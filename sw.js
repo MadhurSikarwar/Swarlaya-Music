@@ -97,7 +97,6 @@ const ASSETS = [
   './public/js/tuner/pitch.worklet.js',
   './public/js/tuner/swar.js',
   './public/js/tuner/tuner.js',
-  './public/js/vendor/vercel-blob-client.js',
   './public/icons/icon.svg',
   './public/icons/icon-192.png',
   './public/fonts/outfit-v15-latin.woff2',

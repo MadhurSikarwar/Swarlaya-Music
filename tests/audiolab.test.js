@@ -308,50 +308,24 @@ test('runs of one job are put back together into one report', () => {
   assert.equal(mergeRuns([lead, other], order).report.default_variant, 'balanced');
 });
 
-test('the serverless function, the upload function and the page agree on where files go', () => {
+test('the serverless function and the page agree on where files go', () => {
   const py = read('audio_lab/serverless.py');
-  const node = read('api/master-upload.js');
   const page = read('public/js/audiolab/serverless.js');
-  // the page names uploads audio-lab/<32 hex>/in/<role>-<8 hex>.<ext>; both functions accept exactly that
+  // the page names uploads audio-lab/<32 hex>/in/<role>-<8 hex>.<ext> and asks the function for a link to each
   assert.match(page, /audio-lab\/\$\{job\.folder\}\/in\/\$\{role\}-\$\{hex\(4\)\}\.\$\{ext\}/);
-  const nodeRe = new RegExp(node.match(/const PATHNAME = \/(.+)\/;/)[1]);
-  const pyRe = new RegExp(py.match(/INPUT_RE = re\.compile\(r"(.+)"\)/)[1].replaceAll('(?:', '(?:'));
-  const ok = `audio-lab/${'a1'.repeat(16)}/in/lehra-0f0f0f0f.mp3`;
-  for (const re of [nodeRe, pyRe]) {
-    assert.ok(re.test(ok), `${re} accepts the page's names`);
-    for (const bad of [`audio-lab/${'a1'.repeat(16)}/in/other-0f0f0f0f.mp3`, `audio-lab/xyz/in/tabla.mp3`,
-      `audio-lab/${'a1'.repeat(16)}/in/../tabla.mp3`, `audio-lab/${'a1'.repeat(16)}/out/tabla.mp3`]) {
-      assert.ok(!re.test(bad), `${re} refuses ${bad}`);
-    }
+  assert.match(page, /`\$\{base\}\/upload-url`/);
+  const pyRe = new RegExp(py.match(/INPUT_RE = re\.compile\(r"(.+)"\)/)[1]);
+  assert.ok(pyRe.test(`audio-lab/${'a1'.repeat(16)}/in/lehra-0f0f0f0f.mp3`), 'the function accepts the page\'s names');
+  for (const bad of [`audio-lab/${'a1'.repeat(16)}/in/other-0f0f0f0f.mp3`, 'audio-lab/xyz/in/tabla.mp3',
+    `audio-lab/${'a1'.repeat(16)}/in/../tabla.mp3`, `audio-lab/${'a1'.repeat(16)}/out/tabla.mp3`]) {
+    assert.ok(!pyRe.test(bad), `refuses ${bad}`);
   }
-  // the size limits match
-  const caps = Object.fromEntries([...node.matchAll(/(\w+): (\d+)/g)].filter(m => ['tabla', 'lehra', 'recorder'].includes(m[1])).map(m => [m[1], +m[2]]));
-  assert.equal(caps.tabla, Number(py.match(/AUDIO_LAB_MAX_UPLOAD_MB", (\d+)/)[1]));
-  assert.equal(caps.lehra, Number(py.match(/AUDIO_LAB_MAX_SIDE_UPLOAD_MB", (\d+)/)[1]));
-  // the page keeps credentials out: it only ever talks to the upload function
-  assert.doesNotMatch(page, /BLOB_READ_WRITE_TOKEN|vercel_blob_rw/);
-});
-
-test('the upload function answers the page without a webhook key, and refuses callbacks', async () => {
-  // @vercel/blob's handleUploadPresigned demands BLOB_WEBHOOK_PUBLIC_KEY even though only the
-  // upload-completed callback uses it; a new Blob store does not set it, so every upload got a 400.
-  const saved = process.env.BLOB_WEBHOOK_PUBLIC_KEY;
-  delete process.env.BLOB_WEBHOOK_PUBLIC_KEY;
-  try {
-    const { default: fn } = await import('../api/master-upload.js');
-    const post = body => fn.fetch(new Request('https://swaralaya.test/api/master-upload', {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
-    }));
-    const bad = await post({ type: 'blob.generate-presigned-url', payload: { pathname: 'elsewhere/x.mp4', clientPayload: null, multipart: false } });
-    assert.equal(bad.status, 400);
-    assert.deepEqual(await bad.json(), { error: 'That upload is not allowed.' }, 'the pathname check ran, so the library got that far');
-    const callback = await post({ type: 'blob.upload-completed', payload: {} });
-    assert.equal(callback.status, 400);
-    assert.deepEqual(await callback.json(), { error: 'That request was not understood.' });
-    assert.equal((await fn.fetch(new Request('https://swaralaya.test/api/master-upload'))).status, 405);
-  } finally {
-    if (saved !== undefined) process.env.BLOB_WEBHOOK_PUBLIC_KEY = saved;
-  }
+  // every extension the page may send is one the function signs a link for
+  const pageExts = [...page.match(/const TYPES = \{([^}]+)\}/)[1].matchAll(/(\w+):/g)].map(m => m[1]);
+  const pyExts = [...py.match(/UPLOAD_EXTENSIONS = \{([^}]+)\}/)[1].matchAll(/"(\w+)"/g)].map(m => m[1]);
+  for (const ext of pageExts) assert.ok(pyExts.includes(ext), `${ext} can be uploaded`);
+  // the page never holds a credential: only signed links come to it
+  assert.doesNotMatch(page, /B2_APPLICATION_KEY|BLOB_READ_WRITE_TOKEN/);
 });
 
 test('the Vercel config routes the Audio Lab without touching the static site', () => {
@@ -362,7 +336,7 @@ test('the Vercel config routes the Audio Lab without touching the static site', 
   assert.equal(cfg.buildCommand, 'node tools/build-static.mjs');
   assert.equal(cfg.outputDirectory, 'dist');
   const pkg = JSON.parse(read('package.json'));
-  assert.deepEqual(Object.keys(pkg.dependencies), ['@vercel/blob'], 'only the upload function needs a package');
+  assert.equal(pkg.dependencies, undefined, 'the website needs no packages at run time');
 });
 
 test('the serverless limit on length comes with the server’s own advice', () => {
@@ -442,29 +416,30 @@ test('every part the sync editor looks up is in its modal', () => {
   assert.equal(modal.match(/data-nudge="/g).length, 4);
 });
 
-test('a cold server is given time to wake up, and the page hears that it is waking', async () => {
-  // On Vercel the first request after a deploy or a quiet spell starts the Python function,
-  // which took longer than the old fixed 6 s: the page then said there was no server at all.
+test('a sleeping service is waited for while it wakes, and the page hears that it is waking', async () => {
+  // The first request after a deploy or a quiet spell starts the function: until it is up the address
+  // fails or answers with something that is not the health JSON. Keep asking, then use it.
   const api = await import('../public/js/audiolab/api.js');
   const realFetch = globalThis.fetch, realWindow = globalThis.window;
-  globalThis.window = { location: { hostname: 'swaralaya.example' } };
-  const timeouts = [];
-  globalThis.fetch = (url, { signal }) => new Promise((resolve, reject) => {
-    const t = setTimeout(() => resolve(new Response(JSON.stringify({ service: 'audio-lab', status: 'ok' }))), 80);
-    signal.addEventListener('abort', () => { clearTimeout(t); reject(new Error('aborted')); });
-  });
-  const realSetTimeout = globalThis.setTimeout;
-  globalThis.setTimeout = (fn, ms, ...rest) => { timeouts.push(ms); return realSetTimeout(fn, ms, ...rest); };
+  globalThis.window = { location: { hostname: 'swarlaya-music.vercel.app' } };
+  const asked = [];
+  const answers = [
+    () => Promise.reject(new TypeError('Failed to fetch')),
+    () => Promise.resolve(new Response('<html>Your Space is starting</html>', { status: 503 })),
+    () => Promise.resolve(new Response(JSON.stringify({ service: 'audio-lab', status: 'ok', version: '1' }))),
+  ];
+  globalThis.fetch = url => { asked.push(url); return new Promise(r => setTimeout(r, 30)).then(answers.shift()); };
   try {
     let slow = 0;
-    const found = await api.detect({ onSlow: () => slow++, slowAfterMs: 20 });
+    const found = await api.detect({ onSlow: () => slow++, slowAfterMs: 20, retryMs: 5 });
     assert.equal(found.ok, true);
-    assert.equal(slow, 1, 'told once that it is taking a while');
-    assert.ok(api.WAKE_TIMEOUT_MS >= 30000 && timeouts.includes(api.WAKE_TIMEOUT_MS), 'the site’s own server gets the long timeout');
+    assert.equal(slow, 1, 'told once that it is waking');
+    assert.equal(asked.length, 3);
+    assert.ok(asked.every(u => u.endsWith('/api/master/health')));
+    assert.ok(api.WAKE_TIMEOUT_MS >= 120000, 'a cold start may take a minute or two');
   } finally {
     globalThis.fetch = realFetch;
     globalThis.window = realWindow;
-    globalThis.setTimeout = realSetTimeout;
   }
 });
 
@@ -480,7 +455,7 @@ test('a run whose stream was cut is collected from the result the server kept', 
   const msg = await pollResult(url, { deadline: Date.now() + 60000, fetchImpl, wait: async () => {} });
   assert.deepEqual(msg.report, { ok: 1 });
   assert.equal(asked.length, 3);
-  assert.ok(asked.every(([u, o]) => u.startsWith(`${url}?t=`) && o.cache === 'no-store'), 'past any cache');
+  assert.ok(asked.every(([u, o]) => u === url && o.cache === 'no-store'), 'the signed link as given, past the browser cache');
 
   // the run's own error is reported as such; a network hiccup is just tried again
   const errs = [Promise.reject(new TypeError('Failed to fetch')),

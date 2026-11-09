@@ -179,7 +179,7 @@ python tools/dev_server.py
 Open **`http://localhost:3000`** (pass another port if 3000 is taken: `python tools/dev_server.py 3001`). It serves the site exactly like the real server — `/lehra`, `/notation`, `/practice` links work, and edited files reload fresh — and answers the separator's API with a message pointing to Docker.
 
 ### 3. Host it for free on Vercel
-The website is static files, so it runs on Vercel's free Hobby plan (no sleeping, HTTPS, global CDN); the Audio Lab adds one Python Function and a Blob store (see [`audio_lab/README.md`](audio_lab/README.md)). Everything works there except the Stem Separator and Practise Along, which need the AI server — on Vercel those pages say so instead of failing.
+The website is static files, so it runs on Vercel's free Hobby plan (no sleeping, HTTPS, global CDN); the Audio Lab adds one Python Function and a free Backblaze B2 bucket for its files (see [`audio_lab/README.md`](audio_lab/README.md)). Everything works there except the Stem Separator and Practise Along, which need the AI server — on Vercel those pages say so instead of failing.
 
 1. Sign in at [vercel.com](https://vercel.com) with GitHub → **Add New… → Project** → import this repository.
 2. Leave every setting as it is — [`vercel.json`](vercel.json) already sets the build (`node tools/build-static.mjs`, output `dist`), the page links (`/lehra`, `/notation`, …) and caching.
@@ -226,7 +226,7 @@ A separate section (`/audio`, reached from the Hindustani page and the footer) t
 * **More than tabla.** Record in the page, sync a second, better recorder to the video automatically, add a vocal or a tanpura bed; profiles for pakhawaj, Kathak, vocal, harmonium and sitar; hall and temple rooms; Spotify/Apple Music/podcast/custom targets; pitch and speed changes; 9:16 or square video with a title; a before/after clip; batch processing; presets.
 * **Riyaz insights.** Tempo over time (rushing and dragging), how even the strokes are, how close to sam, the dayan's tuning against Sa, and an experimental split of stroke types.
 
-The processing is Python (NumPy/SciPy, pedalboard, ffmpeg), kept apart from the C++ server: on Vercel it is a Python Function (`api/master.py`, one recording per instance, uploads through Vercel Blob), and elsewhere its own service. The page finds it at `/api/master/…` (a prefix the C++ server does not use); if it is not there, the page says so and the rest of the site is unaffected. The page's script is loaded only when the Audio Lab is opened. Run it locally with `python -m uvicorn audio_lab.server:app --port 8100`, or `docker compose --profile audio up --build`. Setup, the pipeline, the API, limits and how to put it behind your host: [`audio_lab/README.md`](audio_lab/README.md).
+The processing is Python (NumPy/SciPy, pedalboard, ffmpeg), kept apart from the C++ server: on Vercel it is a Python Function (`api/master.py`, one recording per instance, files in a Backblaze B2 bucket), and elsewhere its own service. The page finds it at `/api/master/…` (a prefix the C++ server does not use); if it is not there, the page says so and the rest of the site is unaffected. The page's script is loaded only when the Audio Lab is opened. Run it locally with `python -m uvicorn audio_lab.server:app --port 8100`, or `docker compose --profile audio up --build`. Setup, the pipeline, the API, limits and how to put it behind your host: [`audio_lab/README.md`](audio_lab/README.md).
 
 ---
 

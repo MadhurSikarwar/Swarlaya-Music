@@ -12,10 +12,14 @@ import * as sls from './serverless.js';
 let base = null;   // the address that answered /health
 let serverless = false;
 
+const isLocalPage = () => ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+
+/** Where to look, in order; `wake` marks the one that may be asleep and is worth waiting for. */
 function candidates() {
-  const list = [AUDIO_LAB_API];
-  const local = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
-  if (local && LOCAL_FALLBACK !== AUDIO_LAB_API) list.push(LOCAL_FALLBACK);
+  if (!isLocalPage()) return [{ url: AUDIO_LAB_API, wake: true }];
+  // on this computer: the local service first (it answers at once or is not there), then the site's own
+  const list = [{ url: LOCAL_FALLBACK, wake: false }];
+  if (AUDIO_LAB_API !== LOCAL_FALLBACK) list.push({ url: AUDIO_LAB_API, wake: false });
   return list;
 }
 
@@ -33,29 +37,34 @@ async function getJson(url, { timeout = 6000 } = {}) {
 }
 
 /**
- * How long the site's own address may take to answer /health. On Vercel the
- * first request after a deploy or a quiet spell starts the Python function
- * (a large bundle), which can take well over the usual few seconds.
+ * How long to keep trying the service while it wakes up: the first request after a deploy or a quiet
+ * spell starts the function (a large bundle), and until it is up the address may fail or time out.
  */
-export const WAKE_TIMEOUT_MS = 45000;
+export const WAKE_TIMEOUT_MS = 150000;
+const RETRY_MS = 3000;
 
 /**
  * Look for the service. Resolves { ok: true, info } once /health answers as
  * the Audio Lab (and remembers where), else { ok: false, reason }.
  * `onSlow()` is called once if the answer takes longer than `slowAfterMs`.
  */
-export async function detect({ onSlow = () => {}, slowAfterMs = 4000 } = {}) {
+export async function detect({ onSlow = () => {}, slowAfterMs = 4000, wakeMs = WAKE_TIMEOUT_MS, retryMs = RETRY_MS } = {}) {
   const slow = setTimeout(onSlow, slowAfterMs);
   try {
-    for (const [i, candidate] of candidates().entries()) {
-      // the site's own address may be waking up; the local fallback answers at once or is not there
-      const timeout = i === 0 ? WAKE_TIMEOUT_MS : 6000;
-      const { ok, body } = await getJson(`${candidate}/health`, { timeout }).catch(() => ({}));
-      if (ok && body && body.service === 'audio-lab' && body.status === 'ok') {
-        base = candidate;
-        serverless = !!body.serverless;
-        if (serverless) sls.configure(candidate, body);
-        return { ok: true, info: body };
+    for (const { url, wake } of candidates()) {
+      const deadline = Date.now() + (wake ? wakeMs : 0);
+      for (;;) {
+        const timeout = wake ? Math.max(1000, Math.min(45000, deadline - Date.now())) : 6000;
+        const { ok, body } = await getJson(`${url}/health`, { timeout }).catch(() => ({}));
+        if (ok && body && body.service === 'audio-lab' && body.status === 'ok') {
+          base = url;
+          serverless = !!body.serverless;
+          if (serverless) sls.configure(url, body);
+          return { ok: true, info: body };
+        }
+        if (body && body.service === 'audio-lab') break;         // it is up, only not set up: no use waiting
+        if (Date.now() + retryMs >= deadline) break;
+        await new Promise(r => setTimeout(r, retryMs));
       }
     }
     return { ok: false, reason: 'unreachable' };
