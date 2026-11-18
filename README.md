@@ -159,24 +159,25 @@ sequenceDiagram
 ## ⚡ Quick Start
 
 > [!TIP]
-> **On Windows, just double-click [`start_website.bat`](start_website.bat).** It uses Docker Desktop when it's running (the full site), otherwise the local server below, and opens your browser as soon as the site is up. If the site is already running it simply opens the browser.
+> **On Windows, just clone the repository and double-click [`start_website.bat`](start_website.bat).** It starts the local server below (all it needs is [Python 3.8+](https://www.python.org/downloads/)) and opens your browser as soon as the site is up. If the site is already running it simply opens the browser, and if another program is using port 3000 it uses the next free port. For the full site with the Stem Separator, run `start_website.bat docker` instead (needs Docker Desktop running).
 
-### 1. Full site with Docker (recommended)
+### 1. Full site with Docker
 Everything, including the AI Stem Separator. Needs [Docker Desktop](https://www.docker.com/products/docker-desktop/) running.
 ```bash
 git clone https://github.com/MadhurSikarwar/Swarlaya-Music.git
 cd Swarlaya-Music
 docker compose up --build
 ```
-Open **`http://localhost:3000`**. The first build compiles the C++ server and takes a while; later starts are quick. Stop it with Ctrl+C (or `docker compose down`).
+Open **`http://localhost:3000`**. The first build compiles the C++ server and downloads about 2 GB, so it takes 10–30 minutes; later starts are quick. Stop it with Ctrl+C (or `docker compose down`).
 
 ### 2. Without Docker (local server)
-The Lehra player, Tuner, Notation Editor and Carnatic suite — everything except the Stem Separator — with just Python 3.8+:
+The Lehra player, Tuner, Notation Editor and Carnatic suite — everything except the Stem Separator — with just Python 3.8+ (this is what `start_website.bat` runs):
 ```bash
+git clone https://github.com/MadhurSikarwar/Swarlaya-Music.git
 cd Swarlaya-Music
 python tools/dev_server.py
 ```
-Open **`http://localhost:3000`** (pass another port if 3000 is taken: `python tools/dev_server.py 3001`). It serves the site exactly like the real server — `/lehra`, `/notation`, `/practice` links work, and edited files reload fresh — and answers the separator's API with a message pointing to Docker.
+Open **`http://localhost:3000`** (pass another port if 3000 is taken: `python tools/dev_server.py 3001`, or add `--open` to have it pick a free port and open the browser). It serves the site exactly like the real server — `/lehra`, `/notation`, `/practice` links work, and edited files reload fresh — and answers the separator's API with a message pointing to Docker.
 
 ### 3. Host it for free on Vercel
 The website is static files, so it runs on Vercel's free Hobby plan (no sleeping, HTTPS, global CDN); the Audio Lab adds one Python Function and a free Backblaze B2 bucket for its files (see [`audio_lab/README.md`](audio_lab/README.md)). Everything works there except the Stem Separator and Practise Along, which need the AI server — on Vercel those pages say so instead of failing.

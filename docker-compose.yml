@@ -2,6 +2,9 @@
 #   docker compose up --build      → http://localhost:3000
 # The website files are mounted from this folder, so frontend edits show up
 # on reload without rebuilding. Changes under drogon_server/ need --build.
+# (drogon_server/config.json keeps "use_sendfile" off: Drogon sendfile()s every
+# file over 200 KB — all the lehra audio — and on Windows these mounts come from
+# the Windows disk, where that isn't reliable. Without it the audio is read normally.)
 services:
   webapp:
     build: .

@@ -1,0 +1,6 @@
+# Windows batch files need CRLF line endings (cmd.exe can misread LF-only
+# files), whatever the clone's core.autocrlf is and in GitHub's ZIP download.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+# Shell scripts must keep LF to run in bash (CI, Git Bash).
+*.sh  text eol=lf

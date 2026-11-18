@@ -14,7 +14,7 @@
         "run_as_daemon": false,
         "handle_sig_term": true,
         "relaunch_on_error": false,
-        "use_sendfile": true,
+        "use_sendfile": false,
         "use_gzip": false,
         "use_brotli": false,
         "static_files_cache_time": 5,

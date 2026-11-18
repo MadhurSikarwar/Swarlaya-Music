@@ -18,10 +18,15 @@ Set AUDIO_LAB_URL to forward somewhere else.
 Usage (from webapp/):   python tools/dev_server.py [port]      default 3000
 Standard library only; Python 3.8+.
 
+start_website.bat runs it with --open: it opens the browser once the site is
+up, just opens it if the site is already running, and moves to the next free
+port when another program is using this one.
+
 To check the static build (node tools/build-static.mjs) as a static host
 serves it — a page per route, robots.txt, sitemap.xml — pass its folder:
                         python tools/dev_server.py 3001 dist
 """
+import errno
 import http.client
 import json
 import mimetypes
@@ -29,6 +34,7 @@ import os
 import socket
 import sys
 import threading
+import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlsplit
 
@@ -49,6 +55,11 @@ AUDIO_LAB_MESSAGE = ('The Audio Lab service is not running. Start it from the we
                      'python -m uvicorn audio_lab.server:app --port 8100')
 API_MESSAGE = ('The Stem Separator needs the full server (it runs Demucs). '
                'Start the site with Docker instead: docker compose up --build')
+# The Server header of this site's own servers: this one and the C++ one (drogon_server/config.json)
+SERVER_NAMES = ('SwaralayaDev/', 'Lehra-Drogon/')
+PORT_TRIES = 10  # with --open: how many ports to try when the first one is taken
+# Binding ::1 fails with these when another program has the port (other errors: no IPv6 here)
+IN_USE = {errno.EADDRINUSE, errno.EACCES, 10048, 10013}  # 10048/10013: WSAEADDRINUSE/WSAEACCES
 
 
 class Body:
@@ -176,35 +187,99 @@ class Handler(SimpleHTTPRequestHandler):
     do_OPTIONS = do_POST
 
 
-class IPv6Server(ThreadingHTTPServer):
+class LoopbackServer(ThreadingHTTPServer):
+    # On Windows, SO_REUSEADDR (which HTTPServer sets) lets a second server bind
+    # a port another program is already listening on: both then get connections
+    # and the pages half-load forever. Bind it exclusively there instead.
+    allow_reuse_address = not hasattr(socket, 'SO_EXCLUSIVEADDRUSE')
+
+    def server_bind(self):
+        if hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
+class IPv6Server(LoopbackServer):
     address_family = socket.AF_INET6
+
+
+def bind(port, handler):
+    """(IPv4 server, IPv6 server or None) on loopback `port`, or None if another program has it."""
+    try:
+        httpd = LoopbackServer(('127.0.0.1', port), handler)
+    except OSError:
+        return None
+    # "localhost" resolves to ::1 first on Windows: answer there too, or every
+    # new connection waits ~2 s before falling back to IPv4 — and if another
+    # program has ::1 on this port (Node's "localhost"), browsers would reach it instead.
+    try:
+        httpd6 = IPv6Server(('::1', port), handler)
+    except OSError as err:
+        if err.errno in IN_USE:
+            httpd.server_close()
+            return None
+        httpd6 = None  # no IPv6: clients fall back to 127.0.0.1
+    return httpd, httpd6
+
+
+def running_here(port):
+    """Whether this site (this server or the Docker one) already answers on `port`."""
+    for host in ('127.0.0.1', '::1'):
+        conn = http.client.HTTPConnection(host, port, timeout=3)
+        try:
+            conn.request('GET', '/health')
+            resp = conn.getresponse()
+            if resp.status == 200 and (resp.getheader('Server') or '').startswith(SERVER_NAMES):
+                return True
+        except (OSError, http.client.HTTPException):
+            pass  # nothing there, no IPv6, or another program that doesn't speak HTTP / hangs
+        finally:
+            conn.close()
+    return False
 
 
 def main():
     global ROOT
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 3000
-    if len(sys.argv) > 2:  # a static build to serve instead of the source tree
-        ROOT = os.path.abspath(sys.argv[2])
+    args = sys.argv[1:]
+    open_browser = '--open' in args  # start_website.bat
+    args = [a for a in args if a != '--open']
+    port = int(args[0]) if args else 3000
+    if len(args) > 1:  # a static build to serve instead of the source tree
+        ROOT = os.path.abspath(args[1])
         if not os.path.isfile(os.path.join(ROOT, 'index.html')):
             sys.exit(f'{ROOT} has no index.html — build it first: node tools/build-static.mjs')
         # (not made the working directory: Windows couldn't replace the folder on the next build)
     else:
         os.chdir(ROOT)
     handler = lambda *a: Handler(*a, directory=ROOT)  # noqa: E731
-    try:
-        httpd = ThreadingHTTPServer(('127.0.0.1', port), handler)
-    except OSError:
-        sys.exit(f'Port {port} is already in use — is the site already running? '
-                 f'Open http://localhost:{port} or pass another port: python tools/dev_server.py 3001')
-    # "localhost" resolves to ::1 first on Windows: answer there too (loopback
-    # only), or every new connection waits ~2 s before falling back to IPv4.
-    try:
-        httpd6 = IPv6Server(('::1', port), handler)
+
+    servers = None
+    last = port + (PORT_TRIES if open_browser else 1) - 1
+    for candidate in range(port, last + 1):
+        servers = bind(candidate, handler)
+        if servers:
+            port = candidate
+            break
+        if running_here(candidate):
+            print(f'Swaralaya is already running: http://localhost:{candidate}', flush=True)
+            if open_browser:
+                webbrowser.open(f'http://localhost:{candidate}/')
+            return
+        if candidate < last:
+            print(f'Port {candidate} is being used by another program on this computer, trying {candidate + 1}...',
+                  flush=True)
+    if not servers:
+        ports = f'Port {port} is' if last == port else f'Ports {port}-{last} are all'
+        sys.exit(f'{ports} being used by other programs. Pass another port: python tools/dev_server.py {last + 1}')
+    httpd, httpd6 = servers
+    if httpd6:
         threading.Thread(target=httpd6.serve_forever, daemon=True).start()
-    except OSError:
-        pass  # no IPv6: clients fall back to 127.0.0.1
-    print(f'Swaralaya dev server: http://localhost:{port}   (Ctrl+C to stop)', flush=True)
+
+    url = f'http://localhost:{port}/'
+    print(f'Swaralaya dev server: {url}   (Ctrl+C to stop)', flush=True)
     print('Everything in the browser works; the Stem Separator needs Docker (docker compose up --build).', flush=True)
+    if open_browser:
+        webbrowser.open(url)  # the sockets are listening already: the first request waits in the queue
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
