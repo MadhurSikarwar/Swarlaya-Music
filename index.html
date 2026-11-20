@@ -45,7 +45,7 @@
       src: url(/public/fonts/outfit-v15-latin-ext.woff2) format('woff2');
       unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
   </style>
-  <link rel="stylesheet" href="/public/css/style.css?v=33" />
+  <link rel="stylesheet" href="/public/css/style.css?v=34" />
   <link rel="manifest" href="/manifest.json" />
   <link rel="icon" href="/public/icons/icon.svg" type="image/svg+xml" />
   <link rel="icon" href="/favicon.ico" sizes="48x48" />
@@ -81,39 +81,108 @@
       </span>
     </a>
 
-    <nav class="site-nav" aria-label="Sections">
-      <a class="nav-btn" href="/carnatic" data-target="view-carnatic" data-domain="carnatic">Carnatic</a>
-      <a class="nav-btn" href="/hindustani" data-target="view-hindustani" data-domain="hindustani">Hindustani</a>
-      <a class="nav-btn" href="/separator/" data-domain="stem">STEM</a>
-      <a class="nav-btn" href="/games" data-target="view-games" data-domain="games">Games</a>
+    <!-- Main navigation: the tools people use most, one click away; the AI tools
+         share one menu. On phones this row is replaced by the tab bar at the
+         bottom (.tab-bar) and the "All tools" sheet (#toolsSheet).
+         data-nav marks which item a page belongs to (navigation.js, tools/seo.mjs). -->
+    <nav class="site-nav" aria-label="Main">
+      <a class="nav-btn" href="/lehra" data-target="view-lehra" data-domain="hindustani" data-nav="lehra">Lehra Player</a>
+      <a class="nav-btn" href="/carnatic" data-target="view-carnatic" data-domain="carnatic" data-nav="carnatic">Carnatic</a>
+      <a class="nav-btn" href="/notation" data-target="view-notation" data-domain="hindustani" data-nav="notation">Notation</a>
+      <a class="nav-btn" href="/games" data-target="view-games" data-domain="games" data-nav="games">Games</a>
+      <div class="nav-menu">
+        <button type="button" class="nav-btn nav-menu-btn" id="studioMenuBtn" data-nav="studio" aria-expanded="false" aria-controls="studioMenu">
+          AI Studio
+          <svg class="nav-caret" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="nav-dropdown" id="studioMenu" hidden>
+          <a class="nav-dropdown-item" href="/separator/" data-nav-item="separator">
+            <span class="nav-dropdown-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h4l2-9 5 18 4-9h5"/></svg></span>
+            <span><strong>Stem Separator</strong><small>Split a song into vocals, drums, bass and more</small></span>
+          </a>
+          <a class="nav-dropdown-item" href="/practice" data-target="view-practice" data-domain="stem" data-nav-item="practice">
+            <span class="nav-dropdown-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
+            <span><strong>Practise Along</strong><small>A separated song at your own Sa and tempo</small></span>
+          </a>
+          <a class="nav-dropdown-item" href="/audio" data-target="view-audio" data-domain="hindustani" data-nav-item="audio">
+            <span class="nav-dropdown-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></span>
+            <span><strong>Audio Lab</strong><small>Clean up and master a tabla recording</small></span>
+          </a>
+        </div>
+      </div>
     </nav>
     <div class="header-right">
-      <button id="tunerBtn" class="header-icon-btn icon-only" title="Swar tuner (microphone)" aria-label="Swar tuner">
+      <button id="tunerBtn" class="header-icon-btn header-labelled" title="Swar tuner (microphone)" aria-label="Swar tuner">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
           <path d="M9 2v7a3 3 0 0 0 6 0V2"/><path d="M12 12v10"/><path d="M9 22h6"/>
         </svg>
+        <span class="header-btn-label">Tuner</span>
       </button>
-      <button id="statsBtn" class="header-icon-btn icon-only" title="Riyaz tracker" aria-label="Riyaz tracker">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M18 20V10M12 20V4M6 20v-6"/>
-        </svg>
-      </button>
-      <a id="accountBtn" class="header-icon-btn icon-only" href="/account" data-target="view-account" title="Your progress" aria-label="Your progress and account">
+      <a id="accountBtn" class="header-icon-btn header-labelled" href="/account" data-target="view-account" data-nav="progress" title="Your riyaz time, scores and account" aria-label="Your progress and account">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
           <circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/>
         </svg>
+        <span class="header-btn-label">Progress</span>
       </a>
     </div>
   </header>
+
+  <!-- Phones and small tablets: the main navigation, at thumb's reach (CSS shows it ≤ 760 px) -->
+  <nav class="tab-bar" aria-label="Main">
+    <a class="tab-btn" href="/" data-target="view-home" data-nav="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg><span>Home</span></a>
+    <a class="tab-btn" href="/lehra" data-target="view-lehra" data-domain="hindustani" data-nav="lehra"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span>Lehra</span></a>
+    <a class="tab-btn" href="/carnatic" data-target="view-carnatic" data-domain="carnatic" data-nav="carnatic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8 Q12 4 19 8 V16 Q12 20 5 16 Z"/><ellipse cx="5" cy="12" rx="1.5" ry="4"/><ellipse cx="19" cy="12" rx="1.5" ry="4"/></svg><span>Carnatic</span></a>
+    <a class="tab-btn" href="/games" data-target="view-games" data-domain="games" data-nav="games"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="6"/><path d="M6 12h4M8 10v4"/><circle cx="15.5" cy="11" r="1"/><circle cx="18" cy="13" r="1"/></svg><span>Games</span></a>
+    <button type="button" class="tab-btn" id="toolsSheetBtn" data-nav="more" aria-expanded="false" aria-controls="toolsSheet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>All tools</span></button>
+  </nav>
+
+  <!-- Every tool, grouped: opened from "All tools" in the tab bar (core/site-nav.js) -->
+  <div class="tools-sheet" id="toolsSheet" role="dialog" aria-modal="true" aria-labelledby="toolsSheetTitle" hidden>
+    <div class="tools-sheet-panel">
+      <div class="tools-sheet-head">
+        <h2 class="panel-title" id="toolsSheetTitle">All tools</h2>
+        <button type="button" class="modal-close" id="toolsSheetClose" aria-label="Close">&times;</button>
+      </div>
+      <p class="sheet-group-title">Daily riyaz</p>
+      <div class="sheet-group">
+        <a class="sheet-item" href="/lehra" data-target="view-lehra" data-domain="hindustani"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span><strong>Lehra Player</strong><small>Sarangi, harmonium, sitar, esraj</small></span></a>
+        <a class="sheet-item" href="/carnatic" data-target="view-carnatic" data-domain="carnatic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8 Q12 4 19 8 V16 Q12 20 5 16 Z"/><ellipse cx="5" cy="12" rx="1.5" ry="4"/><ellipse cx="19" cy="12" rx="1.5" ry="4"/></svg><span><strong>Carnatic</strong><small>Shruti box, tanpura, talam</small></span></a>
+        <button type="button" class="sheet-item" data-open-tuner><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v7a3 3 0 0 0 6 0V2"/><path d="M12 12v10"/><path d="M9 22h6"/></svg><span><strong>Swar Tuner</strong><small>Sing or play — see the swar</small></span></button>
+        <a class="sheet-item" href="/games" data-target="view-games" data-domain="games"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="6"/><path d="M6 12h4M8 10v4"/><circle cx="15.5" cy="11" r="1"/><circle cx="18" cy="13" r="1"/></svg><span><strong>Riyaz Games</strong><small>Ear training and laya</small></span></a>
+      </div>
+      <p class="sheet-group-title">Compose &amp; produce</p>
+      <div class="sheet-group">
+        <a class="sheet-item" href="/notation" data-target="view-notation" data-domain="hindustani"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg><span><strong>Notation Editor</strong><small>Bhatkhande &amp; Paluskar</small></span></a>
+        <a class="sheet-item" href="/separator/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12h4l2-9 5 18 4-9h5"/></svg><span><strong>Stem Separator</strong><small>Split a song with AI</small></span></a>
+        <a class="sheet-item" href="/practice" data-target="view-practice" data-domain="stem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span><strong>Practise Along</strong><small>A separated song at your Sa</small></span></a>
+        <a class="sheet-item" href="/audio" data-target="view-audio" data-domain="hindustani"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span><strong>Audio Lab</strong><small>Master a tabla recording</small></span></a>
+      </div>
+      <p class="sheet-group-title">More</p>
+      <div class="sheet-group">
+        <a class="sheet-item" href="/account" data-target="view-account"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg><span><strong>Your Progress</strong><small>Riyaz time, scores, account</small></span></a>
+        <a class="sheet-item" href="/hindustani" data-target="view-hindustani" data-domain="hindustani"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 14v4a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-4"/><ellipse cx="17" cy="14" rx="4" ry="2"/><path d="M3 13v5a3 3 0 0 0 3 3h4a3 3 0 0 0 3-3v-5"/><ellipse cx="8" cy="13" rx="5" ry="2.5"/></svg><span><strong>Hindustani overview</strong><small>All Hindustani tools</small></span></a>
+      </div>
+    </div>
+  </div>
 
   <!-- Main App -->
   <main class="app-container" id="main" tabindex="-1">
 
     <!-- HOME VIEW -->
-    <div id="view-home" class="app-view active-view">
+    <div id="view-home" class="app-view active-view" data-nav="home">
       <div class="hero-section fade-up">
         <h1 class="hero-title">Free Indian Classical Music <span class="text-gradient">Practice Tools</span></h1>
         <p class="hero-subtitle">Lehra player, tanpura drone, Carnatic shruti box, talam keeper, notation editor and ear-training games — everything you need for your daily riyaz, free and in your browser.</p>
+        <div class="hero-actions">
+          <a class="cta-primary" href="/lehra" data-target="view-lehra" data-domain="hindustani">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
+            Start a lehra
+          </a>
+          <button type="button" class="cta-secondary" data-open-tuner>
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 2v7a3 3 0 0 0 6 0V2"/><path d="M12 12v10"/><path d="M9 22h6"/></svg>
+            Tune up
+          </button>
+        </div>
       </div>
 
       <!-- Continue your riyaz: the last lehra setup and today's practice
@@ -136,53 +205,79 @@
         <a class="btn-tap resume-btn" href="/lehra" data-target="view-lehra" data-domain="hindustani">Open the Lehra Player</a>
       </section>
 
-      <div class="dashboard-grid">
-        <a class="dashboard-card fade-up delay-1" href="/carnatic" data-target="view-carnatic" data-domain="carnatic">
-          <div class="card-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M5 8 Q12 4 19 8 V16 Q12 20 5 16 Z" />
-              <ellipse cx="5" cy="12" rx="1.5" ry="4" />
-              <ellipse cx="19" cy="12" rx="1.5" ry="4" />
-            </svg>
-          </div>
+      <!-- The tools, grouped by what you came to do; every card opens the tool itself -->
+      <section class="tool-group fade-up delay-1" aria-labelledby="homeRiyazTitle">
+        <div class="tool-group-head">
+          <h2 class="tool-group-title" id="homeRiyazTitle">Daily riyaz</h2>
+          <p class="tool-group-sub">Accompaniment, drone, tuning and ear training</p>
+        </div>
+        <div class="dashboard-grid home-tools">
+        <a class="dashboard-card tool-card" href="/lehra" data-target="view-lehra" data-domain="hindustani">
+          <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
           <div class="card-body">
-            <h2>Carnatic</h2>
-            <p>Tanpura and reed shruti box at any kattai, plus a talam keeper for Adi, Rupaka and chapu talas with nadai and kalai.</p>
+            <h3>Lehra Player</h3>
+            <p>Sarangi, harmonium, sitar or esraj for tabla and Kathak riyaz, in any taal, tempo and Sa.</p>
           </div>
         </a>
-        <a class="dashboard-card fade-up delay-2" href="/hindustani" data-target="view-hindustani" data-domain="hindustani">
-          <div class="card-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M13 14v4a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-4" />
-              <ellipse cx="17" cy="14" rx="4" ry="2" />
-              <path d="M3 13v5a3 3 0 0 0 3 3h4a3 3 0 0 0 3-3v-5" />
-              <ellipse cx="8" cy="13" rx="5" ry="2.5" />
-            </svg>
-          </div>
+        <a class="dashboard-card tool-card" href="/carnatic" data-target="view-carnatic" data-domain="carnatic">
+          <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8 Q12 4 19 8 V16 Q12 20 5 16 Z"/><ellipse cx="5" cy="12" rx="1.5" ry="4"/><ellipse cx="19" cy="12" rx="1.5" ry="4"/></svg></div>
           <div class="card-body">
-            <h2>Hindustani</h2>
-            <p>Lehra player on sarangi, harmonium, sitar and esraj for tabla and Kathak riyaz, plus a Bhatkhande and Paluskar notation editor with PDF export.</p>
+            <h3>Carnatic Shruti &amp; Talam</h3>
+            <p>Tanpura or reed shruti box at any kattai, and a talam keeper for all 35 suladi talas.</p>
           </div>
         </a>
-        <a class="dashboard-card fade-up delay-3" href="/separator/">
-          <div class="card-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h4l2-9 5 18 4-9h5"></path></svg>
-          </div>
+        <button class="dashboard-card tool-card" type="button" data-open-tuner>
+          <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v7a3 3 0 0 0 6 0V2"/><path d="M12 12v10"/><path d="M9 22h6"/></svg></div>
           <div class="card-body">
-            <h2>AI Stem Separator</h2>
-            <p>Extract vocals, tabla, harmonium, sitar or any instrument from any audio file using AI — practice along with your favourite recordings.</p>
+            <h3>Swar Tuner</h3>
+            <p>Sing or play: see your swar and how many cents sharp or flat, against your Sa.</p>
+          </div>
+        </button>
+        <a class="dashboard-card tool-card" href="/games" data-target="view-games" data-domain="games">
+          <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="6"/><path d="M6 12h4M8 10v4"/><circle cx="15.5" cy="11" r="1"/><circle cx="18" cy="13" r="1"/></svg></div>
+          <div class="card-body">
+            <h3>Riyaz Games</h3>
+            <p>Swar Pehchaan trains your ear; Sam Pakdo trains your laya, judged to the millisecond.</p>
           </div>
         </a>
-        <a class="dashboard-card fade-up delay-4" href="/games" data-target="view-games" data-domain="games">
-          <div class="card-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="6"/><path d="M6 12h4M8 10v4"/><circle cx="15.5" cy="11" r="1"/><circle cx="18" cy="13" r="1"/></svg>
-          </div>
+        </div>
+      </section>
+
+      <section class="tool-group fade-up delay-2" aria-labelledby="homeCreateTitle">
+        <div class="tool-group-head">
+          <h2 class="tool-group-title" id="homeCreateTitle">Compose &amp; produce</h2>
+          <p class="tool-group-sub">Write it down, learn from recordings, polish your own</p>
+        </div>
+        <div class="dashboard-grid home-tools">
+        <a class="dashboard-card tool-card" href="/notation" data-target="view-notation" data-domain="hindustani">
+          <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></div>
           <div class="card-body">
-            <h2>Riyaz Games</h2>
-            <p>Build your swar recognition and laya with Swar Pehchaan (ear training) and Sam Pakdo (rhythm timing) — level up your listening skills.</p>
+            <h3>Notation Editor</h3>
+            <p>Bhatkhande or Paluskar notation for tabla and vocal compositions; hear it, share it, print it.</p>
           </div>
         </a>
-      </div>
+        <a class="dashboard-card tool-card" href="/separator/">
+          <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l2-9 5 18 4-9h5"/></svg></div>
+          <div class="card-body">
+            <h3>AI Stem Separator</h3>
+            <p>Split any song into vocals, drums, bass and more, then Practise Along at your own Sa and tempo.</p>
+          </div>
+        </a>
+        <a class="dashboard-card tool-card" href="/audio" data-target="view-audio" data-domain="hindustani">
+          <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></div>
+          <div class="card-body">
+            <h3>Audio Lab</h3>
+            <p>Clean up, mix and master a tabla recording with a lehra for Reels, Shorts and YouTube.</p>
+          </div>
+        </a>
+        </div>
+      </section>
+
+      <p class="tradition-links fade-up delay-3">Browse by tradition:
+        <a href="/hindustani" data-target="view-hindustani" data-domain="hindustani">Hindustani</a>
+        <span aria-hidden="true">·</span>
+        <a href="/carnatic" data-target="view-carnatic" data-domain="carnatic">Carnatic</a>
+      </p>
 
       <!-- What each tool does, in a sentence: for visitors deciding where to
            start, and the plain-text description search engines read -->
@@ -201,7 +296,7 @@
     </div>
 
     <!-- CARNATIC VIEW -->
-    <div id="view-carnatic" class="app-view" style="display: none;" data-domain="carnatic">
+    <div id="view-carnatic" class="app-view" style="display: none;" data-domain="carnatic" data-nav="carnatic">
       <div class="hero-section fade-up">
         <h1 class="hero-title">Carnatic <span class="text-gradient">Suite</span></h1>
         <p class="hero-subtitle">Online shruti box and tanpura at any kattai, plus talam keeper for Adi, Rupaka, Misra Chapu and all 35 suladi talas — free Carnatic practice tools in your browser.</p>
@@ -313,7 +408,7 @@
     </div>
 
     <!-- HINDUSTANI DASHBOARD VIEW -->
-    <div id="view-hindustani" class="app-view" style="display: none;" data-domain="hindustani">
+    <div id="view-hindustani" class="app-view" style="display: none;" data-domain="hindustani" data-nav="hindustani">
       <div class="hero-section fade-up">
         <h1 class="hero-title">Hindustani <span class="text-gradient">Music Suite</span></h1>
         <p class="hero-subtitle">Free tools for Hindustani riyaz: tabla practice lehra, tanpura drone, Bhatkhande notation editor and AI song accompaniment — all in your browser.</p>
@@ -359,7 +454,7 @@
     </div>
 
     <!-- LEHRA PLAYER VIEW -->
-    <div id="view-lehra" class="app-view" style="display: none;" data-domain="hindustani">
+    <div id="view-lehra" class="app-view" style="display: none;" data-domain="hindustani" data-nav="lehra">
     <!-- The page's heading: the visible title is the raag (Now Playing) -->
     <h1 class="visually-hidden">Lehra Player</h1>
 
@@ -769,10 +864,15 @@
 
 
     <!-- PRACTICE VIEW: a separated song's accompaniment (/practice?job=…) -->
-    <div id="view-practice" class="app-view" style="display: none;" data-domain="stem">
+    <div id="view-practice" class="app-view" style="display: none;" data-domain="stem" data-nav="studio">
       <div class="hero-section fade-up">
         <h1 class="hero-title">Practise <span class="text-gradient">Along</span></h1>
         <p class="hero-subtitle" id="practiceTitle">The accompaniment of your song, at your Sa and your tempo.</p>
+        <nav class="studio-switch" aria-label="AI Studio">
+          <a href="/separator/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12h4l2-9 5 18 4-9h5"/></svg>Separate<span class="studio-switch-step" aria-hidden="true">1</span></a>
+          <a href="/practice" data-target="view-practice" data-domain="stem" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>Practise Along<span class="studio-switch-step" aria-hidden="true">2</span></a>
+          <a href="/audio" data-target="view-audio" data-domain="hindustani"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>Audio Lab</a>
+        </nav>
       </div>
 
       <section class="control-panel practice-panel">
@@ -864,10 +964,15 @@
 
     <!-- AUDIO LAB (/audio, public/js/audiolab/): clean up, mix and master a tabla / lehra recording.
          The processing runs on the audio_lab/ service; this page uploads, prepares, follows the job and plays the results. -->
-    <div id="view-audio" class="app-view" style="display: none;" data-domain="hindustani">
+    <div id="view-audio" class="app-view" style="display: none;" data-domain="hindustani" data-nav="studio">
       <div class="hero-section fade-up">
         <h1 class="hero-title">Audio <span class="text-gradient">Lab</span></h1>
         <p class="hero-subtitle">Drop in a raw tabla recording &mdash; or record one here &mdash; add a lehra, and get it back cleaned, mixed and matched to Reels, Shorts or YouTube loudness, in three versions to compare by ear.</p>
+        <nav class="studio-switch" aria-label="AI Studio">
+          <a href="/separator/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12h4l2-9 5 18 4-9h5"/></svg>Separate<span class="studio-switch-step" aria-hidden="true">1</span></a>
+          <a href="/practice" data-target="view-practice" data-domain="stem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>Practise Along<span class="studio-switch-step" aria-hidden="true">2</span></a>
+          <a href="/audio" data-target="view-audio" data-domain="hindustani" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>Audio Lab</a>
+        </nav>
       </div>
 
       <section class="control-panel alab-panel alab-server" id="alabServer" aria-live="polite">
@@ -1239,7 +1344,7 @@
 
     <!-- YOUR PROGRESS (/account, public/js/account/): riyaz and game scores,
          and — where sign-in is set up — an account to keep them across devices -->
-    <div id="view-account" class="app-view" style="display: none;">
+    <div id="view-account" class="app-view" style="display: none;" data-nav="progress">
       <div class="hero-section fade-up">
         <h1 class="hero-title">Your <span class="text-gradient">Progress</span></h1>
         <p class="hero-subtitle">Your riyaz and your game scores, in one place.</p>
@@ -1258,6 +1363,7 @@
         <div class="account-links">
           <a class="header-icon-btn" href="/lehra" data-target="view-lehra" data-domain="hindustani">Practise with a lehra</a>
           <a class="header-icon-btn" href="/games" data-target="view-games" data-domain="games">Play a game</a>
+          <button type="button" class="header-icon-btn" id="statsBtn">Weekly chart &amp; daily goal</button>
         </div>
 
         <!-- Shown only where sign-in is set up (public/js/account/config.js) -->
@@ -1299,7 +1405,7 @@
     </div>
 
     <!-- GAMES VIEW (public/js/games/) -->
-    <div id="view-games" class="app-view" style="display: none;" data-domain="games">
+    <div id="view-games" class="app-view" style="display: none;" data-domain="games" data-nav="games">
       <div class="hero-section fade-up">
         <h1 class="hero-title">Riyaz <span class="text-gradient">Games</span></h1>
         <p class="hero-subtitle">Train your ear and your laya — one round at a time.</p>
@@ -1409,7 +1515,7 @@
     </div>
 
     <!-- NOTATION EDITOR VIEW -->
-    <div id="view-notation" class="app-view" style="display: none;" data-domain="hindustani">
+    <div id="view-notation" class="app-view" style="display: none;" data-domain="hindustani" data-nav="notation">
       <h1 class="visually-hidden">Notation Editor</h1>
       <section class="notation-card studio-layout">
         
@@ -1509,14 +1615,38 @@
 
   <!-- Site footer: every tool is one link from every page -->
   <footer class="site-footer">
-    <nav class="footer-nav" aria-label="All tools">
-      <a href="/lehra" data-target="view-lehra" data-domain="hindustani">Lehra Player</a>
-      <a href="/notation" data-target="view-notation" data-domain="hindustani">Notation Editor</a>
-      <a href="/carnatic" data-target="view-carnatic" data-domain="carnatic">Carnatic Shruti &amp; Talam</a>
-      <a href="/games" data-target="view-games" data-domain="games">Riyaz Games</a>
-      <a href="/separator/">Stem Separator</a>
-      <a href="/audio" data-target="view-audio">Audio Lab</a>
-    </nav>
+    <div class="footer-groups">
+      <nav class="footer-group" aria-labelledby="footRiyaz">
+        <h2 id="footRiyaz">Daily riyaz</h2>
+        <div class="footer-nav">
+          <a href="/lehra" data-target="view-lehra" data-domain="hindustani">Lehra Player</a>
+          <a href="/carnatic" data-target="view-carnatic" data-domain="carnatic">Carnatic Shruti &amp; Talam</a>
+          <a href="/games" data-target="view-games" data-domain="games">Riyaz Games</a>
+        </div>
+      </nav>
+      <nav class="footer-group" aria-labelledby="footCreate">
+        <h2 id="footCreate">Compose</h2>
+        <div class="footer-nav">
+          <a href="/notation" data-target="view-notation" data-domain="hindustani">Notation Editor</a>
+        </div>
+      </nav>
+      <nav class="footer-group" aria-labelledby="footStudio">
+        <h2 id="footStudio">AI Studio</h2>
+        <div class="footer-nav">
+          <a href="/separator/">Stem Separator</a>
+          <a href="/practice" data-target="view-practice" data-domain="stem">Practise Along</a>
+          <a href="/audio" data-target="view-audio" data-domain="hindustani">Audio Lab</a>
+        </div>
+      </nav>
+      <nav class="footer-group" aria-labelledby="footYou">
+        <h2 id="footYou">Explore</h2>
+        <div class="footer-nav">
+          <a href="/hindustani" data-target="view-hindustani" data-domain="hindustani">Hindustani tools</a>
+          <a href="/account" data-target="view-account">Your Progress</a>
+          <a href="/" data-target="view-home">Home</a>
+        </div>
+      </nav>
+    </div>
     <div class="footer-meta">
       <span>Swaralaya — free practice tools for Indian classical music.</span>
       <button type="button" class="header-icon-btn" id="tourBtn" hidden title="A step-by-step walk through this page">Take a tour of this page</button>
