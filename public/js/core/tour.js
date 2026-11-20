@@ -26,13 +26,14 @@ const OFFER_DELAY_MS = 1800;
 /** [selector, title, text] per step, for each view that has a tour. */
 export const TOURS = {
   'view-home': [
-    ['.site-nav', 'Four sections', 'Carnatic and Hindustani practice tools, the Stem Separator, and games. The logo on the left always brings you back to this page.'],
+    ['.site-nav', 'Your tools, one click away', 'The Lehra Player, Carnatic shruti and talam, the Notation Editor and the games — and AI Studio for the Stem Separator, Practise Along and the Audio Lab. The logo always brings you back here.'],
+    ['.tab-bar', 'Your tools, at your thumb', 'Home, the Lehra Player, Carnatic and the games are always here. All tools has everything else, grouped.'],
+    ['#view-home .hero-actions', 'Start in one tap', 'Start a lehra straight away, or tune up first with the swar tuner.'],
     ['#resumeCard', 'Pick up where you left off', 'Your last lehra setup and today’s practice against your daily goal. One tap reopens the player exactly as you left it.'],
-    ['#view-home .dashboard-grid', 'Choose where to start', 'Hindustani has the Lehra Player and the Notation Editor; Carnatic has a shruti box and a talam keeper; Games train your ear and your laya.'],
+    ['#view-home .tool-group', 'Choose a tool', 'The daily riyaz tools first; below them, writing compositions and the AI tools. Every card opens the tool itself.'],
     ['#tunerBtn', 'Swar tuner', 'Sing or play into the microphone to see which swar you are on and how many cents sharp or flat. It follows the Sa of the page you are on.'],
-    ['#statsBtn', 'Riyaz tracker', 'Your practice time for the last seven days, your daily goal and your streak.'],
-    ['#accountBtn', 'Your progress', 'All your practice and game scores in one place.'],
-    ['.footer-nav', 'Every tool, one link away', 'Wherever you are on the site, these links jump straight to any tool.'],
+    ['#accountBtn', 'Your progress', 'Your riyaz time, streak, daily goal and game scores — and an optional account to keep them across your devices.'],
+    ['.footer-groups', 'Every page, grouped', 'Wherever you are on the site, these links jump straight to any tool.'],
   ],
   'view-hindustani': [
     ['#view-hindustani .dashboard-card:nth-child(1)', 'Lehra Player', 'A lehra on sarangi, harmonium, sitar or esraj to practise tabla or Kathak with — in any taal, tempo and Sa.'],
@@ -80,6 +81,7 @@ export const TOURS = {
   'view-account': [
     ['#accountStats', 'Your numbers', 'Practice time and game scores. Time is counted whenever a lehra is playing.'],
     ['.account-links', 'Add to them', 'Practise with a lehra or play a game — both show up here.'],
+    ['#statsBtn', 'Weekly chart and goal', 'Your last seven days of riyaz, and the daily goal you are working towards.'],
     ['#accountBox', 'Keep it across devices', 'Signing in backs these up and keeps them in step between your phone and your computer. It is optional.'],
   ],
 };

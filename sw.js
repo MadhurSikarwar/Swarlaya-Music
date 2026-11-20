@@ -49,6 +49,7 @@ const ASSETS = [
   './public/js/core/pwa.js',
   './public/js/core/routes.js',
   './public/js/core/share.js',
+  './public/js/core/site-nav.js',
   './public/js/core/toast.js',
   './public/js/core/tour.js',
   './public/js/games/index.js',

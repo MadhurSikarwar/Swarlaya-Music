@@ -34,6 +34,25 @@ function replaceOne(html, pattern, replacement, what) {
   return out;
 }
 
+/**
+ * Mark the navigation items for `section` (a view's data-nav) as the current
+ * ones: the header link or menu button, the phone tab bar (where a section has
+ * no tab of its own, its "All tools" tab), and the page's own entry in a menu.
+ */
+export function markNav(html, section, path) {
+  let tab = false;
+  let out = html.replace(/<(a|button)( type="button")? class="(nav-btn|tab-btn)([^"]*)"([^>]*?) data-nav="([a-z]+)"/g,
+    (m, tag, type = '', cls, more, attrs, key) => {
+      if (key !== section) return m;
+      if (cls === 'tab-btn') tab = true;
+      const current = tag === 'a' ? ' aria-current="page"' : '';
+      return `<${tag}${type} class="${cls}${more} active"${current}${attrs} data-nav="${key}"`;
+    });
+  if (!tab) out = out.replace(/<button type="button" class="tab-btn"([^>]*) data-nav="more"/, '<button type="button" class="tab-btn active"$1 data-nav="more"');
+  return out.replace(new RegExp(`<a class="(nav-dropdown-item|sheet-item)" href="${path.replace(/[/]/g, '\/')}"`, 'g'),
+    (_, cls) => `<a class="${cls} current" aria-current="page" href="${path}"`);
+}
+
 function setMeta(html, attr, key, value) {
   const pattern = new RegExp(`(<meta ${attr}="${key}" content=")[^"]*(")`, 'g');
   return replaceOne(html, pattern, (_, a, b) => a + escapeAttr(value) + b, `<meta ${attr}="${key}">`);
@@ -191,17 +210,14 @@ export function renderPage(html, route, { siteUrl = '', preload = [] } = {}) {
   if (head.length) out = replaceOne(out, /<\/head>/g, `  ${head.join('\n  ')}\n</head>`, '</head>');
 
   if (route.view !== 'view-home') {
-    out = replaceOne(out, /<div id="view-home" class="app-view active-view">/g,
-      '<div id="view-home" class="app-view" style="display: none;">', 'home view');
+    out = replaceOne(out, /<div id="view-home" class="app-view active-view"/g,
+      '<div id="view-home" class="app-view" style="display: none;"', 'home view');
     out = replaceOne(out, new RegExp(`<div id="${route.view}" class="app-view" style="display: none;"`, 'g'),
       `<div id="${route.view}" class="app-view active-view"`, `#${route.view}`);
-    // The header shows where you are, as navigation.js does
-    const domain = new RegExp(`<div id="${route.view}" [^>]*data-domain="([a-z]+)"`).exec(out)?.[1];
-    if (domain) {
-      out = replaceOne(out, new RegExp(`<a class="nav-btn"( [^>]*data-domain="${domain}")`, 'g'),
-        (_, rest) => `<a class="nav-btn active" aria-current="page"${rest}`, `nav link for ${domain}`);
-    }
   }
+  // The navigation shows where you are, as core/site-nav.js does in the browser
+  const section = new RegExp(`<div id="${route.view}" [^>]*data-nav="([a-z]+)"`).exec(out)?.[1];
+  if (section) out = markNav(out, section, route.path);
   return demoteHiddenHeadings(out, route.view);
 }
 

@@ -7,6 +7,7 @@
  * view here instead of reloading the page.
  */
 import { routeForView } from './routes.js';
+import { setActiveNav } from './site-nav.js';
 
 const VIEW_PATHS = {
   'view-home': '/',
@@ -111,7 +112,7 @@ function focusView(target) {
   el.focus({ preventScroll: true });
 }
 
-export function navigateTo(target, domain) {
+export function navigateTo(target) {
   leaveHooks.forEach(fn => fn());
   updateHead(target);
 
@@ -120,11 +121,6 @@ export function navigateTo(target, domain) {
     v.style.display = 'none';
     v.classList.remove('active-view', 'entering');
   });
-  document.querySelectorAll('.nav-btn').forEach(b => {
-    b.classList.remove('active');
-    b.removeAttribute('aria-current');
-  });
-
   const view = document.getElementById(target);
   if (view) {
     view.style.display = '';
@@ -133,15 +129,8 @@ export function navigateTo(target, domain) {
     view.classList.add('entering');
   }
 
-  // If no domain provided, try to infer it from the target view
-  if (!domain && view) domain = view.getAttribute('data-domain');
-  if (domain) {
-    const navBtn = document.querySelector(`.nav-btn[data-domain="${domain}"]`);
-    if (navBtn) {
-      navBtn.classList.add('active');
-      navBtn.setAttribute('aria-current', 'page');
-    }
-  }
+  // The header, the tab bar and the menus show which section this page is in
+  setActiveNav(view?.dataset.nav || null, VIEW_PATHS[target] || '/');
   if (view) enterHooks.forEach(fn => fn(target));
 }
 
@@ -167,6 +156,7 @@ export function initNavigation() {
     window.history.replaceState({ target, domain }, '', window.location.href);
   } else {
     updateHead('view-home');
+    setActiveNav('home', '/');
   }
 
   // "Skip to content": move the focus without touching the URL's #hash
